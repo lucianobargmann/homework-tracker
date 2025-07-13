@@ -25,7 +25,7 @@ services:
       # Optional: Middleware for security headers
       - "traefik.http.routers.homework.middlewares=secure-headers@file"
     networks:
-      - traefik
+      - web
     restart: unless-stopped
 
   # Optional: PostgreSQL for production database
@@ -45,7 +45,7 @@ services:
   #   restart: unless-stopped
 
 networks:
-  traefik:
+  web:
     external: true
 
 volumes:

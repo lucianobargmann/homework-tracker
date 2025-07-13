@@ -112,9 +112,14 @@ labels:
 ```
 
 ### Network
-- External network: `traefik`
+- External network: `web` (Traefik network)
 - Automatic SSL with Let's Encrypt
 - Security headers via middleware
+
+**Note**: The network name may vary by server setup. Common names:
+- `web` (most common Traefik setup)
+- `traefik` (alternative naming)
+- Check existing networks: `docker network ls`
 
 ## 🔍 Monitoring & Troubleshooting
 
@@ -132,10 +137,38 @@ docker-compose logs -f homework-tracker
 
 ### Common Issues
 
-**1. Traefik network not found:**
+**1. Network Configuration:**
+First, identify your server's Traefik network:
 ```bash
+# List all networks
+docker network ls
+
+# Common Traefik network names:
+# - web (most common)
+# - traefik
+# - proxy
+```
+
+Then update `docker-compose.yml` to match:
+```yaml
+networks:
+  web:  # or traefik, proxy, etc.
+    external: true
+```
+
+**2. Traefik network not found:**
+```bash
+# Check existing networks first
+docker network ls
+
+# Create the network if it doesn't exist
+# Use 'web' for most Traefik setups, or 'traefik' for others
+docker network create web
+# OR
 docker network create traefik
 ```
+
+**Note**: Update `docker-compose.yml` to match your server's network name.
 
 **2. Image transfer fails:**
 - Check SSH key permissions: `chmod 600 ~/.ssh/hunt-luke-2025.pem`
