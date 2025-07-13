@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   homework-tracker:
     image: hcktplanet/homework-tracker:latest
