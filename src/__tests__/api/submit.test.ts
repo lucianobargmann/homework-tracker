@@ -21,7 +21,8 @@ jest.mock('../../lib/db', () => ({
 const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>
 
 // Import after mocking
-import { POST, submissionAttempts } from '../../app/api/candidate/submit/route'
+import { POST } from '../../app/api/candidate/submit/route'
+import { submissionAttempts } from '../../lib/rate-limiter'
 import { prisma } from '../../lib/db'
 
 const mockFindUnique = prisma.user.findUnique as jest.MockedFunction<typeof prisma.user.findUnique>

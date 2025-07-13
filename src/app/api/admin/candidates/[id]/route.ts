@@ -5,11 +5,12 @@ import { prisma } from '@/lib/db'
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const resolvedParams = await params;
     const session = await getServerSession(authOptions)
-    
+
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -27,7 +28,7 @@ export async function PATCH(
     }
 
     const candidate = await prisma.user.update({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
       data: { archived },
       include: { job_opening: true }
     })

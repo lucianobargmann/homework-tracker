@@ -23,11 +23,25 @@ export default function Assignment() {
         if (userData.started_at) {
           const startTime = new Date(userData.started_at)
           setStartedAt(startTime)
-          
+
           // Calculate initial elapsed time
           const now = new Date()
           const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000)
-          setTimeElapsed(elapsed)
+
+          // Ensure elapsed time is never negative or NaN
+          const validElapsed = isNaN(elapsed) || elapsed < 0 ? 0 : elapsed
+
+          // Debug logging for negative time issues
+          if (elapsed < 0) {
+            console.error('Negative time detected:', {
+              now: now.toISOString(),
+              startTime: startTime.toISOString(),
+              rawStartedAt: userData.started_at,
+              elapsed
+            })
+          }
+
+          setTimeElapsed(validElapsed)
         } else {
           // If no started_at, redirect back to welcome
           router.push('/welcome')
@@ -47,10 +61,13 @@ export default function Assignment() {
     const interval = setInterval(() => {
       const now = new Date()
       const elapsed = Math.floor((now.getTime() - startedAt.getTime()) / 1000)
-      setTimeElapsed(elapsed)
-      
+
+      // Ensure elapsed time is never negative or NaN
+      const validElapsed = isNaN(elapsed) || elapsed < 0 ? 0 : elapsed
+      setTimeElapsed(validElapsed)
+
       // Store in localStorage for persistence
-      localStorage.setItem('assignment-timer', elapsed.toString())
+      localStorage.setItem('assignment-timer', validElapsed.toString())
     }, 1000)
 
     return () => clearInterval(interval)
@@ -60,20 +77,26 @@ export default function Assignment() {
     // Load from localStorage on mount
     const stored = localStorage.getItem('assignment-timer')
     if (stored && startedAt) {
-      const storedElapsed = parseInt(stored)
       const now = new Date()
       const actualElapsed = Math.floor((now.getTime() - startedAt.getTime()) / 1000)
-      
+
       // Use the actual elapsed time (don't trust localStorage completely)
-      setTimeElapsed(actualElapsed)
+      // Ensure it's never negative or NaN
+      const validElapsed = isNaN(actualElapsed) || actualElapsed < 0 ? 0 : actualElapsed
+      setTimeElapsed(validElapsed)
     }
   }, [startedAt])
 
   const formatTime = (seconds: number) => {
+    // Handle negative or invalid values
+    if (seconds < 0 || !isFinite(seconds)) {
+      return '00:00:00'
+    }
+
     const hours = Math.floor(seconds / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
     const secs = seconds % 60
-    
+
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 

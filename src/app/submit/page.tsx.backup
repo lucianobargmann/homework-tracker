@@ -1,103 +1,103 @@
-'use client';
+'use client'
 
-import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import Header from '@/components/Header';
+import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
+import Header from '@/components/Header'
 
 export default function Submit() {
-  const { data: session } = useSession();
-  const router = useRouter();
-  const [githubLink, setGithubLink] = useState('');
-  const [promptsUsed, setPromptsUsed] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [submittedAt, setSubmittedAt] = useState<string | null>(null);
-  const [timeElapsed, setTimeElapsed] = useState(0);
-  const [startedAt, setStartedAt] = useState<Date | null>(null);
-  const [finalTimeElapsed, setFinalTimeElapsed] = useState<number | null>(null);
+  const { data: session } = useSession()
+  const router = useRouter()
+  const [githubLink, setGithubLink] = useState('')
+  const [promptsUsed, setPromptsUsed] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [submittedAt, setSubmittedAt] = useState<string | null>(null)
+  const [timeElapsed, setTimeElapsed] = useState(0)
+  const [startedAt, setStartedAt] = useState<Date | null>(null)
+  const [finalTimeElapsed, setFinalTimeElapsed] = useState<number | null>(null)
 
   useEffect(() => {
-    if (!session?.user?.email) return;
+    if (!session?.user?.email) return
 
     // Fetch user data to check if already submitted
     const fetchUserData = async () => {
       try {
-        const response = await fetch('/api/candidate/profile');
-        const userData = await response.json();
+        const response = await fetch('/api/candidate/profile')
+        const userData = await response.json()
         
         if (userData.submitted_at) {
-          setSubmitted(true);
-          setSubmittedAt(userData.submitted_at);
-          setGithubLink(userData.github_link || '');
-          setPromptsUsed(userData.prompts_used || '');
+          setSubmitted(true)
+          setSubmittedAt(userData.submitted_at)
+          setGithubLink(userData.github_link || '')
+          setPromptsUsed(userData.prompts_used || '')
 
           // Calculate final time for completed submissions
           if (userData.started_at) {
-            const startTime = new Date(userData.started_at);
-            const endTime = new Date(userData.submitted_at);
-            const elapsed = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
-            setFinalTimeElapsed(elapsed);
+            const startTime = new Date(userData.started_at)
+            const endTime = new Date(userData.submitted_at)
+            const elapsed = Math.floor((endTime.getTime() - startTime.getTime()) / 1000)
+            setFinalTimeElapsed(elapsed)
           }
         }
 
         if (userData.started_at) {
-          const startTime = new Date(userData.started_at);
-          setStartedAt(startTime);
+          const startTime = new Date(userData.started_at)
+          setStartedAt(startTime)
 
           // Only calculate current elapsed time if not yet submitted
           if (!userData.submitted_at) {
-            const elapsed = Math.floor((new Date().getTime() - startTime.getTime()) / 1000);
+            const elapsed = Math.floor((new Date().getTime() - startTime.getTime()) / 1000)
             // Ensure elapsed time is never negative or NaN
-            const validElapsed = isNaN(elapsed) || elapsed < 0 ? 0 : elapsed;
-            setTimeElapsed(validElapsed);
+            const validElapsed = isNaN(elapsed) || elapsed < 0 ? 0 : elapsed
+            setTimeElapsed(validElapsed)
           }
         }
       } catch (error) {
-        console.error('Error fetching user data:', error);
+        console.error('Error fetching user data:', error)
       }
-    };
+    }
 
-    fetchUserData();
-  }, [session]);
+    fetchUserData()
+  }, [session])
 
   // Keep timer running until submission
   useEffect(() => {
-    if (!startedAt || submitted) return;
+    if (!startedAt || submitted) return
 
     const interval = setInterval(() => {
-      const now = new Date();
-      const elapsed = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
+      const now = new Date()
+      const elapsed = Math.floor((now.getTime() - startedAt.getTime()) / 1000)
       // Ensure elapsed time is never negative or NaN
-      const validElapsed = isNaN(elapsed) || elapsed < 0 ? 0 : elapsed;
-      setTimeElapsed(validElapsed);
-    }, 1000);
+      const validElapsed = isNaN(elapsed) || elapsed < 0 ? 0 : elapsed
+      setTimeElapsed(validElapsed)
+    }, 1000)
 
-    return () => clearInterval(interval);
-  }, [startedAt, submitted]);
+    return () => clearInterval(interval)
+  }, [startedAt, submitted])
 
   const formatTime = (seconds: number) => {
     // Handle negative or invalid values
     if (seconds < 0 || !isFinite(seconds)) {
-      return '00:00:00';
+      return '00:00:00'
     }
 
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const secs = seconds % 60
 
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault()
     
     if (!githubLink.trim() || !promptsUsed.trim()) {
-      alert('Please fill in both GitHub link and prompts used.');
-      return;
+      alert('Please fill in both GitHub link and prompts used.')
+      return
     }
 
-    setLoading(true);
+    setLoading(true)
     try {
       const response = await fetch('/api/candidate/submit', {
         method: 'POST',
@@ -106,37 +106,37 @@ export default function Submit() {
           github_link: githubLink.trim(),
           prompts_used: promptsUsed.trim(),
         }),
-      });
+      })
 
       if (response.ok) {
-        const data = await response.json();
-        setSubmitted(true);
-        setSubmittedAt(data.submitted_at);
+        const data = await response.json()
+        setSubmitted(true)
+        setSubmittedAt(data.submitted_at)
 
         // Set final elapsed time and stop the running timer
         if (startedAt) {
-          const endTime = new Date(data.submitted_at);
-          const elapsed = Math.floor((endTime.getTime() - startedAt.getTime()) / 1000);
-          setFinalTimeElapsed(elapsed);
+          const endTime = new Date(data.submitted_at)
+          const elapsed = Math.floor((endTime.getTime() - startedAt.getTime()) / 1000)
+          setFinalTimeElapsed(elapsed)
         }
       } else {
-        const error = await response.json();
-        alert(error.error || 'Failed to submit assignment');
+        const error = await response.json()
+        alert(error.error || 'Failed to submit assignment')
       }
     } catch (error) {
-      console.error('Error submitting assignment:', error);
-      alert('An error occurred while submitting');
+      console.error('Error submitting assignment:', error)
+      alert('An error occurred while submitting')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   if (!session) {
     return (
       <div className="min-h-screen metacto-gradient flex items-center justify-center">
         <div className="text-lg text-white">Loading...</div>
       </div>
-    );
+    )
   }
 
   return (
@@ -165,7 +165,7 @@ export default function Submit() {
                   </div>
                 </div>
               )}
-            </div>
+          </div>
 
             {submitted ? (
               <div className="text-center">
@@ -173,17 +173,19 @@ export default function Submit() {
                   <div className="flex justify-center">
                     <div className="flex-shrink-0">
                       <svg className="h-8 w-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
                     <div className="ml-3">
-                      <h3 className="text-lg font-medium text-white">
+                      <h3 className="text-lg font-medium text-green-400">
                         Submission Received
                       </h3>
                       <div className="mt-2 text-sm text-green-300">
                         <p>
-                          Your assignment has been successfully submitted and will be reviewed. 
-                          Thank you for your time and effort. The results will be considered.
+                          Your assignment was submitted on {new Date(submittedAt!).toLocaleString()}.
+                        </p>
+                        <p className="mt-2 font-medium">
+                          Any changes made after this timestamp will not be considered.
                         </p>
                       </div>
                     </div>
@@ -212,7 +214,7 @@ export default function Submit() {
                     </div>
                   </div>
                 </div>
-              </div>
+            </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
@@ -261,12 +263,12 @@ export default function Submit() {
                       </svg>
                     </div>
                     <div className="ml-3">
-                      <h3 className="text-sm font-medium text-yellow-300">
+                      <h3 className="text-sm font-medium text-yellow-400">
                         Important Notice
                       </h3>
                       <div className="mt-2 text-sm text-yellow-300">
                         <p>
-                          Please ensure your GitHub repository is complete and accessible.
+                          Once you submit, you cannot make changes. Make sure your GitHub repository is complete and accessible.
                         </p>
                       </div>
                     </div>
@@ -284,9 +286,8 @@ export default function Submit() {
                 </div>
               </form>
             )}
-          </div>
         </div>
       </div>
     </div>
-  );
+  )
 }

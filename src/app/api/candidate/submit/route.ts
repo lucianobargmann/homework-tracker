@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-
-// Simple in-memory rate limiter for submission attempts
-export const submissionAttempts = new Map<string, { count: number; lastAttempt: number }>()
-const RATE_LIMIT_WINDOW = 60 * 1000 // 1 minute
-const MAX_ATTEMPTS = 5 // Max 5 attempts per minute per user
+import { submissionAttempts, RATE_LIMIT_WINDOW, MAX_ATTEMPTS } from '@/lib/rate-limiter'
 
 export async function POST(request: NextRequest) {
   try {

@@ -33,9 +33,12 @@ export const authOptions: NextAuthOptions = {
         if (dbUser) {
           session.user.id = dbUser.id
           session.user.is_admin = dbUser.is_admin
-          session.user.job_opening = dbUser.job_opening
-          session.user.started_at = dbUser.started_at
-          session.user.submitted_at = dbUser.submitted_at
+          session.user.job_opening = dbUser.job_opening ? {
+            ...dbUser.job_opening,
+            created_at: dbUser.job_opening.created_at.toISOString()
+          } : null
+          session.user.started_at = dbUser.started_at?.toISOString() || null
+          session.user.submitted_at = dbUser.submitted_at?.toISOString() || null
         }
       }
       return session
