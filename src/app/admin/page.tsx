@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 
 interface JobOpening {
   id: string
@@ -22,6 +23,7 @@ interface User {
 
 export default function AdminDashboard() {
   const { data: session } = useSession()
+  const router = useRouter()
   const [jobOpenings, setJobOpenings] = useState<JobOpening[]>([])
   const [candidates, setCandidates] = useState<User[]>([])
   const [newJobName, setNewJobName] = useState('')
@@ -35,13 +37,31 @@ export default function AdminDashboard() {
     fetchCandidates()
   }, [])
 
+  const handleUnauthorized = () => {
+    router.push('/auth/signin')
+  }
+
   const fetchJobOpenings = async () => {
     try {
       const response = await fetch('/api/admin/job-openings')
       const data = await response.json()
-      setJobOpenings(data)
+
+      // Handle unauthorized/forbidden responses
+      if (response.status === 401 || response.status === 403) {
+        handleUnauthorized()
+        return
+      }
+
+      // Check if the response is successful and contains an array
+      if (response.ok && Array.isArray(data)) {
+        setJobOpenings(data)
+      } else {
+        console.error('Error fetching job openings:', data.error || 'Invalid response format')
+        setJobOpenings([]) // Set to empty array on error
+      }
     } catch (error) {
       console.error('Error fetching job openings:', error)
+      setJobOpenings([]) // Set to empty array on error
     }
   }
 
@@ -49,9 +69,23 @@ export default function AdminDashboard() {
     try {
       const response = await fetch('/api/admin/candidates')
       const data = await response.json()
-      setCandidates(data)
+
+      // Handle unauthorized/forbidden responses
+      if (response.status === 401 || response.status === 403) {
+        handleUnauthorized()
+        return
+      }
+
+      // Check if the response is successful and contains an array
+      if (response.ok && Array.isArray(data)) {
+        setCandidates(data)
+      } else {
+        console.error('Error fetching candidates:', data.error || 'Invalid response format')
+        setCandidates([]) // Set to empty array on error
+      }
     } catch (error) {
       console.error('Error fetching candidates:', error)
+      setCandidates([]) // Set to empty array on error
     }
   }
 
