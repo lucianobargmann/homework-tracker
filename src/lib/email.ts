@@ -58,7 +58,7 @@ export async function sendMagicLinkEmail(email: string, url: string) {
         <!-- Footer -->
         <div style="background-color: #0f0f23; padding: 20px 30px; text-align: center; border-top: 1px solid #16213e;">
           <p style="color: #6c757d; margin: 0; font-size: 12px;">
-            © 2024 MetaCTO. All rights reserved.
+            © 2025 MetaCTO. All rights reserved.
           </p>
         </div>
       </div>
