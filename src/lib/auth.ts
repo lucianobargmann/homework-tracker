@@ -78,7 +78,7 @@ export const authOptions: NextAuthOptions = {
       if (new URL(url).origin === baseUrl) {
         return url
       }
-      // Otherwise redirect to home
+      // After successful sign in, redirect to home (which will then redirect to appropriate page)
       return baseUrl
     }
   },

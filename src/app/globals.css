@@ -1,26 +1,67 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #1a1a2e;
+  --foreground: #ffffff;
+  --metacto-orange: #F18700;
+  --metacto-dark: #16213e;
+  --metacto-purple: #0f0f23;
+  --metacto-light-gray: #f8f9fa;
+  --metacto-gray: #6c757d;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-metacto-orange: var(--metacto-orange);
+  --color-metacto-dark: var(--metacto-dark);
+  --color-metacto-purple: var(--metacto-purple);
+  --color-metacto-light-gray: var(--metacto-light-gray);
+  --color-metacto-gray: var(--metacto-gray);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #ffffff;
+    --foreground: #1a1a2e;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+}
+
+/* MetaCTO gradient background */
+.metacto-gradient {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%);
+}
+
+/* MetaCTO button styles */
+.btn-metacto-primary {
+  background-color: var(--metacto-orange);
+  color: white;
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.btn-metacto-primary:hover {
+  background-color: #d67300;
+  transform: translateY(-1px);
+}
+
+.btn-metacto-secondary {
+  background-color: transparent;
+  color: var(--metacto-orange);
+  border: 2px solid var(--metacto-orange);
+  transition: all 0.3s ease;
+}
+
+.btn-metacto-secondary:hover {
+  background-color: var(--metacto-orange);
+  color: white;
 }

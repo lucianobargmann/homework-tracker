@@ -16,6 +16,7 @@ interface User {
   started_at?: string
   submitted_at?: string
   github_link?: string
+  prompts_used?: string
   archived: boolean
 }
 
@@ -27,6 +28,7 @@ export default function AdminDashboard() {
   const [newCandidateEmail, setNewCandidateEmail] = useState('')
   const [selectedJobId, setSelectedJobId] = useState('')
   const [loading, setLoading] = useState(false)
+  const [selectedPrompts, setSelectedPrompts] = useState<{email: string, prompts: string} | null>(null)
 
   useEffect(() => {
     fetchJobOpenings()
@@ -224,6 +226,9 @@ export default function AdminDashboard() {
                     Time Taken
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Prompts Used
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Archive
                   </th>
                 </tr>
@@ -265,6 +270,20 @@ export default function AdminDashboard() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {getTimeTaken(candidate)}
                     </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {candidate.prompts_used ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setSelectedPrompts({email: candidate.email, prompts: candidate.prompts_used!})}
+                            className="text-blue-600 hover:text-blue-800 font-medium"
+                          >
+                            View Prompts ({candidate.prompts_used.split('\n').filter(line => line.trim()).length} lines)
+                          </button>
+                        </div>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <input
                         type="checkbox"
@@ -280,6 +299,38 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Fullscreen Prompts Modal */}
+      {selectedPrompts && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg w-full h-full max-w-6xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Prompts Used by {selectedPrompts.email}
+              </h2>
+              <button
+                onClick={() => setSelectedPrompts(null)}
+                className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex-1 p-6 overflow-auto">
+              <pre className="text-sm whitespace-pre-wrap font-mono bg-gray-50 p-4 rounded border">
+                {selectedPrompts.prompts}
+              </pre>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => setSelectedPrompts(null)}
+                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

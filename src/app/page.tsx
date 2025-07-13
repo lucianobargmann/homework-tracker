@@ -29,15 +29,15 @@ export default function Home() {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Loading...</div>
+      <div className="min-h-screen metacto-gradient flex items-center justify-center">
+        <div className="text-lg text-white">Loading...</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-lg">Redirecting...</div>
+    <div className="min-h-screen metacto-gradient flex items-center justify-center">
+      <div className="text-lg text-white">Redirecting...</div>
     </div>
   )
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Header from '@/components/Header'
 
 export default function Submit() {
   const { data: session } = useSession()
@@ -122,154 +123,160 @@ export default function Submit() {
   }
 
   if (!session) {
-    return <div>Loading...</div>
+    return (
+      <div className="min-h-screen metacto-gradient flex items-center justify-center">
+        <div className="text-lg text-white">Loading...</div>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-3xl mx-auto">
-        <div className="bg-white shadow rounded-lg p-8">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-4">
-              Submit Your Assignment
-            </h1>
-            <p className="text-lg text-gray-600">
-              {session.user?.email}
-            </p>
-            {startedAt && (
-              <div className="mt-4 p-4 bg-blue-50 rounded-md">
-                <div className="text-sm text-blue-600">
-                  {submitted ? 'Total Time Taken' : 'Current Time Elapsed'}
+    <div className="min-h-screen metacto-gradient">
+      <Header title="Submit Assignment" showSignOut={true} />
+      <div className="py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-3xl mx-auto">
+          <div className="bg-metacto-dark/80 backdrop-blur-sm shadow-xl rounded-lg p-8 border border-metacto-purple/20">
+            <div className="text-center mb-8">
+              <h1 className="text-3xl font-bold text-white mb-4">
+                Submit Your Assignment
+              </h1>
+              <p className="text-lg text-metacto-light-gray">
+                {session.user?.email}
+              </p>
+              {startedAt && (
+                <div className="mt-4 p-4 bg-metacto-purple/30 rounded-md border border-metacto-orange/20">
+                  <div className="text-sm text-metacto-orange">
+                    {submitted ? 'Total Time Taken' : 'Current Time Elapsed'}
+                  </div>
+                  <div className={`text-2xl font-mono font-bold ${
+                    (finalTimeElapsed || timeElapsed) > 7200 ? 'text-red-400' :
+                    (finalTimeElapsed || timeElapsed) > 5400 ? 'text-yellow-400' : 'text-green-400'
+                  }`}>
+                    {formatTime(finalTimeElapsed || timeElapsed)}
+                  </div>
                 </div>
-                <div className={`text-2xl font-mono font-bold ${
-                  (finalTimeElapsed || timeElapsed) > 7200 ? 'text-red-600' :
-                  (finalTimeElapsed || timeElapsed) > 5400 ? 'text-yellow-600' : 'text-green-600'
-                }`}>
-                  {formatTime(finalTimeElapsed || timeElapsed)}
-                </div>
-              </div>
-            )}
+              )}
           </div>
 
-          {submitted ? (
-            <div className="text-center">
-              <div className="bg-green-50 border border-green-200 rounded-md p-6 mb-8">
-                <div className="flex justify-center">
-                  <div className="flex-shrink-0">
-                    <svg className="h-8 w-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-lg font-medium text-green-800">
-                      Submission Received
-                    </h3>
-                    <div className="mt-2 text-sm text-green-700">
-                      <p>
-                        Your assignment was submitted on {new Date(submittedAt!).toLocaleString()}.
-                      </p>
-                      <p className="mt-2 font-medium">
-                        Any changes made after this timestamp will not be considered.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 rounded-md p-6 text-left">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Submitted Details</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">GitHub Repository</label>
-                    <a
-                      href={githubLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-1 text-blue-600 hover:text-blue-800 break-all"
-                    >
-                      {githubLink}
-                    </a>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Prompts Used</label>
-                    <div className="mt-1 p-3 bg-white border border-gray-300 rounded-md">
-                      <pre className="whitespace-pre-wrap text-sm text-gray-900">{promptsUsed}</pre>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label htmlFor="github-link" className="block text-sm font-medium text-gray-700 mb-2">
-                  GitHub Repository URL *
-                </label>
-                <input
-                  type="url"
-                  id="github-link"
-                  value={githubLink}
-                  onChange={(e) => setGithubLink(e.target.value)}
-                  placeholder="https://github.com/username/repository"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 bg-white placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  required
-                  disabled={loading}
-                />
-                <p className="mt-1 text-sm text-gray-500">
-                  Provide the full URL to your GitHub repository containing the completed assignment.
-                </p>
-              </div>
-
-              <div>
-                <label htmlFor="prompts-used" className="block text-sm font-medium text-gray-700 mb-2">
-                  Prompts Used *
-                </label>
-                <textarea
-                  id="prompts-used"
-                  value={promptsUsed}
-                  onChange={(e) => setPromptsUsed(e.target.value)}
-                  rows={10}
-                  placeholder="Paste all the prompts you used with Claude Code here..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 bg-white placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  required
-                  disabled={loading}
-                />
-                <p className="mt-1 text-sm text-gray-500">
-                  Include all prompts you used during the assignment for audit purposes.
-                </p>
-              </div>
-
-              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-yellow-800">
-                      Important Notice
-                    </h3>
-                    <div className="mt-2 text-sm text-yellow-700">
-                      <p>
-                        Once you submit, you cannot make changes. Make sure your GitHub repository is complete and accessible.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
+            {submitted ? (
               <div className="text-center">
-                <button
-                  type="submit"
-                  disabled={loading || !githubLink.trim() || !promptsUsed.trim()}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-8 rounded-md text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Submitting...' : 'Submit Assignment'}
-                </button>
-              </div>
-            </form>
-          )}
+                <div className="bg-green-900/30 border border-green-400/30 rounded-md p-6 mb-8">
+                  <div className="flex justify-center">
+                    <div className="flex-shrink-0">
+                      <svg className="h-8 w-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-lg font-medium text-green-400">
+                        Submission Received
+                      </h3>
+                      <div className="mt-2 text-sm text-green-300">
+                        <p>
+                          Your assignment was submitted on {new Date(submittedAt!).toLocaleString()}.
+                        </p>
+                        <p className="mt-2 font-medium">
+                          Any changes made after this timestamp will not be considered.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-metacto-purple/30 rounded-md p-6 text-left border border-metacto-purple/20">
+                  <h3 className="text-lg font-medium text-white mb-4">Submitted Details</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-metacto-light-gray">GitHub Repository</label>
+                      <a
+                        href={githubLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 text-metacto-orange hover:text-orange-300 break-all"
+                      >
+                        {githubLink}
+                      </a>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-metacto-light-gray">Prompts Used</label>
+                      <div className="mt-1 p-3 bg-metacto-dark/50 border border-metacto-gray/30 rounded-md">
+                        <pre className="whitespace-pre-wrap text-sm text-white">{promptsUsed}</pre>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+            </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div>
+                  <label htmlFor="github-link" className="block text-sm font-medium text-white mb-2">
+                    GitHub Repository URL *
+                  </label>
+                  <input
+                    type="url"
+                    id="github-link"
+                    value={githubLink}
+                    onChange={(e) => setGithubLink(e.target.value)}
+                    placeholder="https://github.com/username/repository"
+                    className="w-full px-3 py-3 border border-metacto-gray/30 rounded-md shadow-sm text-white bg-metacto-dark/50 backdrop-blur-sm placeholder-metacto-gray focus:outline-none focus:ring-2 focus:ring-metacto-orange focus:border-metacto-orange"
+                    required
+                    disabled={loading}
+                  />
+                  <p className="mt-1 text-sm text-metacto-light-gray">
+                    Provide the full URL to your GitHub repository containing the completed assignment.
+                  </p>
+                </div>
+
+                <div>
+                  <label htmlFor="prompts-used" className="block text-sm font-medium text-white mb-2">
+                    Prompts Used *
+                  </label>
+                  <textarea
+                    id="prompts-used"
+                    value={promptsUsed}
+                    onChange={(e) => setPromptsUsed(e.target.value)}
+                    rows={10}
+                    placeholder="Paste all the prompts you used with Claude Code here..."
+                    className="w-full px-3 py-3 border border-metacto-gray/30 rounded-md shadow-sm text-white bg-metacto-dark/50 backdrop-blur-sm placeholder-metacto-gray focus:outline-none focus:ring-2 focus:ring-metacto-orange focus:border-metacto-orange"
+                    required
+                    disabled={loading}
+                  />
+                  <p className="mt-1 text-sm text-metacto-light-gray">
+                    Include all prompts you used during the assignment for audit purposes.
+                  </p>
+                </div>
+
+                <div className="bg-yellow-900/30 border border-yellow-400/30 rounded-md p-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-yellow-400">
+                        Important Notice
+                      </h3>
+                      <div className="mt-2 text-sm text-yellow-300">
+                        <p>
+                          Once you submit, you cannot make changes. Make sure your GitHub repository is complete and accessible.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-center">
+                  <button
+                    type="submit"
+                    disabled={loading || !githubLink.trim() || !promptsUsed.trim()}
+                    className="btn-metacto-primary font-medium py-3 px-8 rounded-md text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? 'Submitting...' : 'Submit Assignment'}
+                  </button>
+                </div>
+              </form>
+            )}
         </div>
       </div>
     </div>
