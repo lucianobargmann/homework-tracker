@@ -1,0 +1,42 @@
+# Traefik Middleware Configuration
+# Place this file in your Traefik configuration directory
+# Usually: /etc/traefik/dynamic/ or ./config/
+
+http:
+  middlewares:
+    secure-headers:
+      headers:
+        # Security Headers
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+        
+        # Custom Headers
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+        
+        customResponseHeaders:
+          X-Robots-Tag: "noindex,nofollow,nosnippet,noarchive"
+          X-Frame-Options: "DENY"
+          X-Content-Type-Options: "nosniff"
+          Referrer-Policy: "strict-origin-when-cross-origin"
+          Permissions-Policy: "geolocation=(), microphone=(), camera=()"
+    
+    # Rate limiting middleware (optional)
+    rate-limit:
+      rateLimit:
+        burst: 100
+        average: 50
+        period: "1m"
+    
+    # Compression middleware (optional)
+    compression:
+      compress: {}
+
+# Example usage in docker-compose labels:
+# - "traefik.http.routers.homework.middlewares=secure-headers@file,rate-limit@file,compression@file"

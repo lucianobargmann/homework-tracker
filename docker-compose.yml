@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  homework-tracker:
+    build: .
+    container_name: homework-tracker
+    environment:
+      - NODE_ENV=production
+      - NEXTAUTH_URL=https://homework.hcktplanet.com
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - SUPERADMINS=luciano.bargmann@metacto.com
+      - DATABASE_URL=file:./prod.db
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_FROM=${SMTP_FROM}
+    volumes:
+      - homework_data:/app/prisma
+    labels:
+      # Traefik configuration
+      - "traefik.enable=true"
+      - "traefik.http.routers.homework.rule=Host(`homework.hcktplanet.com`)"
+      - "traefik.http.routers.homework.entrypoints=websecure"
+      - "traefik.http.routers.homework.tls.certresolver=letsencrypt"
+      - "traefik.http.services.homework.loadbalancer.server.port=3000"
+      # Optional: Middleware for security headers
+      - "traefik.http.routers.homework.middlewares=secure-headers@file"
+    networks:
+      - traefik
+    restart: unless-stopped
+
+  # Optional: PostgreSQL for production database
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: homework-postgres
+  #   environment:
+  #     POSTGRES_DB: homework_tracker
+  #     POSTGRES_USER: homework_user
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   labels:
+  #     - "traefik.enable=false"
+  #   networks:
+  #     - traefik
+  #   restart: unless-stopped
+
+networks:
+  traefik:
+    external: true
+
+volumes:
+  homework_data:
+  # postgres_data:
