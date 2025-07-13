@@ -1,0 +1,76 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model JobOpening {
+  id         String   @id @default(uuid())
+  name       String
+  created_at DateTime @default(now())
+  users      User[]
+
+  @@map("job_openings")
+}
+
+model User {
+  id             String      @id @default(uuid())
+  email          String      @unique
+  emailVerified  DateTime?
+  image          String?
+  is_admin       Boolean     @default(false)
+  job_opening_id String?
+  started_at     DateTime?
+  submitted_at   DateTime?
+  github_link    String?
+  prompts_used   String?
+  archived       Boolean     @default(false)
+  job_opening    JobOpening? @relation(fields: [job_opening_id], references: [id])
+
+  accounts Account[]
+  sessions Session[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
