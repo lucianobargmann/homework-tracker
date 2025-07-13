@@ -21,9 +21,7 @@ services:
       - "traefik.http.routers.homework.rule=Host(`homework.hcktplanet.com`)"
       - "traefik.http.routers.homework.entrypoints=websecure"
       - "traefik.http.routers.homework.tls.certresolver=letsencrypt"
-      - "traefik.http.services.homework.loadbalancer.server.port=3000"
-      # Optional: Middleware for security headers
-      - "traefik.http.routers.homework.middlewares=secure-headers@file"
+      - "traefik.http.services.homework.loadbalancer.server.port=3000"      
     networks:
       - web
     restart: unless-stopped
