@@ -12,6 +12,7 @@
     "test:coverage": "jest --coverage",
     "deploy": "./scripts/deploy.sh",
     "deploy:traefik": "./scripts/deploy-traefik.sh",
+    "deploy:remote": "./scripts/build-and-deploy.sh",
     "monitor": "./scripts/monitor.sh",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
@@ -50,5 +51,9 @@
     "puppeteer": "^24.12.1",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "glob": "^10.4.5",
+    "inflight": "npm:@isaacs/inflight@^1.0.6"
   }
 }

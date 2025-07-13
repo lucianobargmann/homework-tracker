@@ -148,10 +148,60 @@ npm run test:coverage
 - [x] Admin dashboard shows candidate statuses
 - [x] All data stored securely in SQLite
 
+## 📁 Project Structure
+
+### 📖 Documentation
+- [Production Deployment Guide](./docs/PRODUCTION_READY.md) - Complete production setup
+- [Traefik Deployment](./docs/TRAEFIK_DEPLOYMENT.md) - Deploy with Traefik reverse proxy
+- [Remote Deployment](./docs/REMOTE_DEPLOYMENT.md) - Build locally, deploy via SSH
+- [Security Setup](./docs/SECURE_SETUP.md) - Environment and security configuration
+- [Implementation Summary](./docs/IMPLEMENTATION_SUMMARY.md) - Technical implementation details
+
+### 🔧 Scripts & Configuration
+- [Build & Deploy Script](./scripts/build-and-deploy.sh) - Local build and SSH transfer
+- [Server Start Script](./scripts/start-server.sh) - Server-side startup
+- [Traefik Deploy Script](./scripts/deploy-traefik.sh) - Direct Traefik deployment
+- [Monitor Script](./scripts/monitor.sh) - Health monitoring
+- [Environment Templates](./scripts/) - `.env.production`, `.env.traefik`, `.env.example`
+- [Traefik Middleware](./scripts/traefik-middleware.yml) - Security headers configuration
+
+### 🧪 Testing
+- [E2E Tests](./tests/) - Puppeteer end-to-end tests
+- [Unit Tests](./src/__tests__/) - Jest unit tests
+- [API Tests](./src/__tests__/api/) - API endpoint tests
+
+### 🐳 Deployment Files
+- [Dockerfile](./Dockerfile) - Multi-stage production build
+- [Docker Compose](./docker-compose.yml) - Traefik-ready configuration
+- [Docker Ignore](./.dockerignore) - Build optimization
+
+## 🚀 Quick Start Commands
+
+```bash
+# Development
+npm run dev                    # Start development server
+npm test                      # Run tests
+npm run build                 # Build for production
+
+# Deployment
+npm run deploy:remote         # Build and deploy to server
+npm run deploy:traefik        # Deploy with Traefik locally
+npm run monitor              # Monitor application health
+
+# Database
+npm run db:push              # Apply schema changes
+npm run db:generate          # Generate Prisma client
+npm run db:studio            # Open Prisma Studio
+
+# Docker
+npm run docker:build         # Build Docker image
+npm run docker:run           # Run with Docker
+npm run docker:compose       # Start with docker-compose
+```
+
 ## Production Deployment
 
-1. Update environment variables for production
-2. Configure SMTP settings for Brevo or other email service
-3. Set secure NEXTAUTH_SECRET
-4. Deploy to your preferred platform (Vercel, Railway, etc.)
-5. Ensure database persistence in production environment
+See the comprehensive guides in the [docs](./docs/) folder:
+- **[Production Ready Guide](./docs/PRODUCTION_READY.md)** - Complete production checklist
+- **[Traefik Deployment](./docs/TRAEFIK_DEPLOYMENT.md)** - Deploy with reverse proxy
+- **[Remote Deployment](./docs/REMOTE_DEPLOYMENT.md)** - SSH-based deployment

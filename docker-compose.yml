@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   homework-tracker:
-    build: .
+    image: hcktplanet/homework-tracker:latest
     container_name: homework-tracker
     environment:
       - NODE_ENV=production
