@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Header from '@/components/Header'
@@ -10,6 +10,34 @@ export default function Welcome() {
   const router = useRouter()
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  // Check submission status on mount
+  useEffect(() => {
+    if (!session?.user?.email) return
+
+    const checkSubmissionStatus = async () => {
+      try {
+        const response = await fetch('/api/candidate/profile')
+        const userData = await response.json()
+
+        // If user has already submitted, redirect to submit page
+        if (userData.submitted_at) {
+          router.push('/submit')
+          return
+        }
+
+        // If user has already started, redirect to assignment page
+        if (userData.started_at) {
+          router.push('/assignment')
+          return
+        }
+      } catch (error) {
+        console.error('Error checking user status:', error)
+      }
+    }
+
+    checkSubmissionStatus()
+  }, [session, router])
 
   const handleContinue = () => {
     setShowConfirmation(true)

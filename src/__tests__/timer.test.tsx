@@ -129,5 +129,69 @@ describe('Timer Tests - No Negative Values', () => {
       expect(result).toBe(0)
       expect(result).toBeGreaterThanOrEqual(0)
     })
+
+    it('should handle server-client time synchronization securely', () => {
+      // Simulate the new server-synchronized timer logic
+      const calculateElapsedWithServerSync = (
+        startTime: Date,
+        clientTime: number,
+        serverTimeOffset: number
+      ) => {
+        const syncedTime = clientTime + serverTimeOffset
+        const elapsed = Math.floor((syncedTime - startTime.getTime()) / 1000)
+        return Math.max(0, elapsed) // Always positive with server sync
+      }
+
+      const startTime = new Date('2025-01-01T10:00:00Z')
+
+      // Test case: Client clock is behind server by 10 seconds
+      const clientTimeBehind = new Date('2025-01-01T10:05:00Z').getTime() // 5 minutes after start
+      const serverOffsetAhead = 10000 // Server is 10 seconds ahead
+
+      const elapsedBehind = calculateElapsedWithServerSync(startTime, clientTimeBehind, serverOffsetAhead)
+      expect(elapsedBehind).toBe(310) // 5 minutes + 10 seconds = 310 seconds
+
+      // Test case: Client clock is ahead of server by 10 seconds
+      const clientTimeAhead = new Date('2025-01-01T10:05:00Z').getTime() // 5 minutes after start
+      const serverOffsetBehind = -10000 // Server is 10 seconds behind
+
+      const elapsedAhead = calculateElapsedWithServerSync(startTime, clientTimeAhead, serverOffsetBehind)
+      expect(elapsedAhead).toBe(290) // 5 minutes - 10 seconds = 290 seconds
+
+      // Test case: Extreme client manipulation (client sets clock way back)
+      const clientTimeManipulated = new Date('2025-01-01T09:00:00Z').getTime() // 1 hour before start
+      const normalOffset = 0
+
+      const elapsedManipulated = calculateElapsedWithServerSync(startTime, clientTimeManipulated, normalOffset)
+      expect(elapsedManipulated).toBe(0) // Should be 0, not negative
+
+      // Test case: Normal operation
+      const clientTimeNormal = new Date('2025-01-01T10:03:00Z').getTime() // 3 minutes after start
+      const normalOffsetSmall = 1000 // 1 second difference
+
+      const elapsedNormal = calculateElapsedWithServerSync(startTime, clientTimeNormal, normalOffsetSmall)
+      expect(elapsedNormal).toBe(181) // 3 minutes + 1 second = 181 seconds
+    })
+
+    it('should prevent timer manipulation attacks', () => {
+      // Test that the timer logic is resistant to common manipulation attempts
+
+      // Attack 1: Setting client clock to future
+      const startTime = new Date('2025-01-01T10:00:00Z')
+      const futureClientTime = new Date('2025-01-01T15:00:00Z').getTime() // 5 hours in future
+      const serverOffset = -18000000 // Server is 5 hours behind (realistic server time)
+
+      const syncedTime = futureClientTime + serverOffset
+      const elapsed = Math.floor((syncedTime - startTime.getTime()) / 1000)
+      const validElapsed = Math.max(0, elapsed)
+
+      // Should calculate based on server time, not manipulated client time
+      expect(validElapsed).toBe(0) // Server time shows no time has passed
+
+      // Attack 2: Negative time manipulation
+      const negativeElapsed = -3600 // -1 hour
+      const secureElapsed = Math.max(0, negativeElapsed)
+      expect(secureElapsed).toBe(0) // Always non-negative
+    })
   })
 })

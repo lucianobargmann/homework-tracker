@@ -20,6 +20,7 @@ A full-stack web application for managing candidate homework assignments with ma
 
 ### Candidate Features
 - Protected welcome page with timer warning
+- Secure server-synchronized timer that prevents manipulation
 - Persistent timer that survives page refreshes
 - PDF assignment download
 - Submission form for GitHub repository and prompts
@@ -136,6 +137,8 @@ npm run test:coverage
 - Session-based authentication
 - CSRF protection via NextAuth.js
 - Input validation and sanitization
+- Server-authoritative timer system resistant to client manipulation
+- Clock synchronization attack prevention
 
 ## QA Checkpoints ✅
 

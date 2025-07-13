@@ -350,7 +350,7 @@ export default function AdminDashboard() {
               </button>
             </div>
             <div className="flex-1 p-6 overflow-auto">
-              <pre className="text-sm whitespace-pre-wrap font-mono bg-gray-50 p-4 rounded border">
+              <pre className="text-sm whitespace-pre-wrap font-mono bg-gray-50 p-4 rounded border text-gray-900">
                 {selectedPrompts.prompts}
               </pre>
             </div>

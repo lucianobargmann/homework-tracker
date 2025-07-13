@@ -37,13 +37,22 @@ export async function middleware(request: NextRequest) {
       try {
         const user = await prisma.user.findUnique({
           where: { email: token.email },
-          select: { submitted_at: true }
+          select: { submitted_at: true, started_at: true }
         })
 
-        // If user has submitted and is trying to access welcome or assignment pages,
-        // redirect them to the submit page to see their results
-        if (user?.submitted_at && ['/welcome', '/assignment'].includes(request.nextUrl.pathname)) {
+        // If user has submitted, they can ONLY access the submit page
+        if (user?.submitted_at && request.nextUrl.pathname !== '/submit') {
           return NextResponse.redirect(new URL('/submit', request.url))
+        }
+
+        // If user hasn't started yet, they can only access welcome page
+        if (!user?.started_at && request.nextUrl.pathname !== '/welcome') {
+          return NextResponse.redirect(new URL('/welcome', request.url))
+        }
+
+        // If user has started but not submitted, they can access assignment and submit pages
+        if (user?.started_at && !user?.submitted_at && request.nextUrl.pathname === '/welcome') {
+          return NextResponse.redirect(new URL('/assignment', request.url))
         }
       } catch (error) {
         console.error('Error checking submission status in middleware:', error)

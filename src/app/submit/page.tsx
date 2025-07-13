@@ -16,16 +16,26 @@ export default function Submit() {
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [startedAt, setStartedAt] = useState<Date | null>(null);
   const [finalTimeElapsed, setFinalTimeElapsed] = useState<number | null>(null);
+  const [serverTimeOffset, setServerTimeOffset] = useState<number>(0);
 
   useEffect(() => {
     if (!session?.user?.email) return;
 
-    // Fetch user data to check if already submitted
-    const fetchUserData = async () => {
+    // Initialize with server time synchronization
+    const initializeSubmitPage = async () => {
       try {
+        // Get server time offset
+        const timeResponse = await fetch('/api/time');
+        const timeData = await timeResponse.json();
+        const serverTime = new Date(timeData.serverTime).getTime();
+        const clientTime = Date.now();
+        const offset = serverTime - clientTime;
+        setServerTimeOffset(offset);
+
+        // Fetch user data to check if already submitted
         const response = await fetch('/api/candidate/profile');
         const userData = await response.json();
-        
+
         if (userData.submitted_at) {
           setSubmitted(true);
           setSubmittedAt(userData.submitted_at);
@@ -39,6 +49,23 @@ export default function Submit() {
             const elapsed = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
             setFinalTimeElapsed(elapsed);
           }
+
+          // Prevent back navigation after submission by replacing history
+          // This ensures users can't go back to assignment pages after submitting
+          window.history.replaceState(null, '', '/submit');
+
+          // Add a popstate listener to prevent back navigation
+          const handlePopState = (event: PopStateEvent) => {
+            event.preventDefault();
+            window.history.pushState(null, '', '/submit');
+          };
+
+          window.addEventListener('popstate', handlePopState);
+
+          // Cleanup listener on unmount
+          return () => {
+            window.removeEventListener('popstate', handlePopState);
+          };
         }
 
         if (userData.started_at) {
@@ -47,34 +74,37 @@ export default function Submit() {
 
           // Only calculate current elapsed time if not yet submitted
           if (!userData.submitted_at) {
-            const elapsed = Math.floor((new Date().getTime() - startTime.getTime()) / 1000);
-            // Ensure elapsed time is never negative or NaN
-            const validElapsed = isNaN(elapsed) || elapsed < 0 ? 0 : elapsed;
+            const syncedTime = clientTime + offset;
+            const elapsed = Math.floor((syncedTime - startTime.getTime()) / 1000);
+            const validElapsed = Math.max(0, elapsed);
             setTimeElapsed(validElapsed);
           }
+        } else {
+          // If user hasn't started, redirect to welcome
+          router.push('/welcome');
         }
       } catch (error) {
-        console.error('Error fetching user data:', error);
+        console.error('Error initializing submit page:', error);
       }
     };
 
-    fetchUserData();
-  }, [session]);
+    initializeSubmitPage();
+  }, [session, router]);
 
-  // Keep timer running until submission
+  // Keep timer running until submission using server-synchronized time
   useEffect(() => {
-    if (!startedAt || submitted) return;
+    if (!startedAt || submitted || serverTimeOffset === 0) return;
 
     const interval = setInterval(() => {
-      const now = new Date();
-      const elapsed = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
-      // Ensure elapsed time is never negative or NaN
-      const validElapsed = isNaN(elapsed) || elapsed < 0 ? 0 : elapsed;
+      const clientTime = Date.now();
+      const syncedTime = clientTime + serverTimeOffset;
+      const elapsed = Math.floor((syncedTime - startedAt.getTime()) / 1000);
+      const validElapsed = Math.max(0, elapsed);
       setTimeElapsed(validElapsed);
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [startedAt, submitted]);
+  }, [startedAt, submitted, serverTimeOffset]);
 
   const formatTime = (seconds: number) => {
     // Handle negative or invalid values

@@ -10,60 +10,74 @@ export default function Assignment() {
   const router = useRouter()
   const [timeElapsed, setTimeElapsed] = useState(0)
   const [startedAt, setStartedAt] = useState<Date | null>(null)
+  const [serverTimeOffset, setServerTimeOffset] = useState<number>(0) // Difference between server and client time
 
   useEffect(() => {
     if (!session?.user?.email) return
 
-    // Fetch user data to get started_at
-    const fetchUserData = async () => {
+    // Initialize timer with server time synchronization
+    const initializeTimer = async () => {
       try {
+        // First, get server time to calculate offset
+        const timeResponse = await fetch('/api/time')
+        const timeData = await timeResponse.json()
+        const serverTime = new Date(timeData.serverTime).getTime()
+        const clientTime = Date.now()
+        const offset = serverTime - clientTime
+        setServerTimeOffset(offset)
+
+        // Then get user data
         const response = await fetch('/api/candidate/profile')
         const userData = await response.json()
-        
+
+        // If user has already submitted, redirect to submit page immediately
+        if (userData.submitted_at) {
+          router.push('/submit')
+          return
+        }
+
         if (userData.started_at) {
           const startTime = new Date(userData.started_at)
           setStartedAt(startTime)
 
-          // Calculate initial elapsed time
-          const now = new Date()
-          const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000)
+          // Calculate initial elapsed time using server-synchronized time
+          const syncedClientTime = clientTime + offset
+          const elapsed = Math.floor((syncedClientTime - startTime.getTime()) / 1000)
 
-          // Ensure elapsed time is never negative or NaN
-          const validElapsed = isNaN(elapsed) || elapsed < 0 ? 0 : elapsed
-
-          // Debug logging for negative time issues
-          if (elapsed < 0) {
-            console.error('Negative time detected:', {
-              now: now.toISOString(),
-              startTime: startTime.toISOString(),
-              rawStartedAt: userData.started_at,
-              elapsed
-            })
-          }
-
+          // This should now always be positive since we're using server time
+          const validElapsed = Math.max(0, elapsed)
           setTimeElapsed(validElapsed)
+
+          console.log('Timer initialized with server sync:', {
+            serverOffset: offset,
+            startTime: startTime.toISOString(),
+            elapsed: validElapsed
+          })
         } else {
           // If no started_at, redirect back to welcome
           router.push('/welcome')
         }
       } catch (error) {
-        console.error('Error fetching user data:', error)
+        console.error('Error initializing timer:', error)
       }
     }
 
-    fetchUserData()
+    initializeTimer()
   }, [session, router])
 
   useEffect(() => {
     if (!startedAt) return
 
-    // Update timer every second
+    // Update timer every second using server-synchronized time
     const interval = setInterval(() => {
-      const now = new Date()
-      const elapsed = Math.floor((now.getTime() - startedAt.getTime()) / 1000)
+      const clientTime = Date.now()
+      const syncedTime = clientTime + serverTimeOffset
+      const elapsed = Math.floor((syncedTime - startedAt.getTime()) / 1000)
 
-      // Ensure elapsed time is never negative or NaN
-      const validElapsed = isNaN(elapsed) || elapsed < 0 ? 0 : elapsed
+      // With server sync, this should always be positive
+      const validElapsed = Math.max(0, elapsed)
+
+      // Update timer - no need for complex backwards jump protection since we're using server time
       setTimeElapsed(validElapsed)
 
       // Store in localStorage for persistence
@@ -71,21 +85,29 @@ export default function Assignment() {
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [startedAt])
+  }, [startedAt, serverTimeOffset])
 
   useEffect(() => {
-    // Load from localStorage on mount
+    // Load from localStorage on mount, but recalculate using server time
     const stored = localStorage.getItem('assignment-timer')
-    if (stored && startedAt) {
-      const now = new Date()
-      const actualElapsed = Math.floor((now.getTime() - startedAt.getTime()) / 1000)
+    if (stored && startedAt && serverTimeOffset !== 0) {
+      const clientTime = Date.now()
+      const syncedTime = clientTime + serverTimeOffset
+      const actualElapsed = Math.floor((syncedTime - startedAt.getTime()) / 1000)
 
-      // Use the actual elapsed time (don't trust localStorage completely)
-      // Ensure it's never negative or NaN
-      const validElapsed = isNaN(actualElapsed) || actualElapsed < 0 ? 0 : actualElapsed
-      setTimeElapsed(validElapsed)
+      // Use server-synchronized time (should always be positive)
+      const validElapsed = Math.max(0, actualElapsed)
+
+      // Only update if we don't already have a reasonable time set
+      setTimeElapsed(prevTime => {
+        if (prevTime > 0) {
+          // Use the larger of the two values (more conservative)
+          return Math.max(prevTime, validElapsed)
+        }
+        return validElapsed
+      })
     }
-  }, [startedAt])
+  }, [startedAt, serverTimeOffset])
 
   const formatTime = (seconds: number) => {
     // Handle negative or invalid values
