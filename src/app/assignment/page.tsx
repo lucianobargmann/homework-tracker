@@ -196,7 +196,7 @@ export default function Assignment() {
                       </p>
                       <div className="mt-4">
                         <a
-                          href="/assignment_v1.pdf"
+                          href="/assignment.pdf"
                           download
                           className="btn-metacto-primary inline-flex items-center px-4 py-2 text-sm font-medium rounded-md"
                         >

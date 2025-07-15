@@ -91,7 +91,7 @@ homework-tracker/
 ├── prisma/
 │   └── schema.prisma        # Database schema
 └── public/
-    └── assignment_v1.pdf       # Sample assignment
+    └── assignment.pdf       # Sample assignment
 ```
 
 ## 🎯 Ready for Production

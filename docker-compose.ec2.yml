@@ -1,0 +1,38 @@
+services:
+  homework-tracker:
+    image: hcktplanet/homework-tracker:latest
+    container_name: homework-tracker
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/prisma/prod.db
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-please-change-this-secret-in-production}
+      - NEXTAUTH_URL=https://homework.metacto.com
+      - SUPERADMINS=luciano.bargmann@metacto.com
+    volumes:
+      - homework_data:/app/prisma
+    networks:
+      - web
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - web
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
+  homework_data:
+
+networks:
+  web:
+    driver: bridge

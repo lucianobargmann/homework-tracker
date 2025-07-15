@@ -1,12 +1,55 @@
 #!/bin/bash
 set -e
 
-# Configuration
-SERVER_IP="164.163.10.235"
-SSH_KEY="~/.ssh/hunt-luke-2025.pem"
+# Default Configuration
+DEFAULT_SERVER="164.163.10.235"
+DEFAULT_USER="root"
+DEFAULT_SSH_KEY="~/.ssh/hunt-luke-2025.pem"
 IMAGE_NAME="hcktplanet/homework-tracker"
 
+# Initialize variables with defaults
+SERVER_IP="$DEFAULT_SERVER"
+SSH_USER="$DEFAULT_USER"
+SSH_KEY="$DEFAULT_SSH_KEY"
+
+# Function to display usage
+usage() {
+    echo "Usage: $0 [-s server] [-u user] [-i ssh_key]"
+    echo "  -s server    Server IP or hostname (default: $DEFAULT_SERVER)"
+    echo "  -u user      SSH user (default: $DEFAULT_USER)"
+    echo "  -i ssh_key   Path to SSH private key (default: $DEFAULT_SSH_KEY)"
+    echo "  -h           Display this help message"
+    exit 1
+}
+
+# Parse command line arguments
+while getopts "s:u:i:h" opt; do
+    case $opt in
+        s)
+            SERVER_IP="$OPTARG"
+            ;;
+        u)
+            SSH_USER="$OPTARG"
+            ;;
+        i)
+            SSH_KEY="$OPTARG"
+            ;;
+        h)
+            usage
+            ;;
+        \?)
+            echo "Invalid option: -$OPTARG" >&2
+            usage
+            ;;
+    esac
+done
+
 echo "🚀 Building and deploying Homework Tracker..."
+echo "📍 Configuration:"
+echo "   Server: $SERVER_IP"
+echo "   User: $SSH_USER"
+echo "   SSH Key: $SSH_KEY"
+echo ""
 
 # Check if .env.production exists and use it, otherwise fall back to .env
 if [ -f .env.production ]; then
@@ -55,13 +98,13 @@ fi
 echo "🚢 Transferring image to server..."
 
 # Transfer to server with optional progress
-docker save $TAG $LATEST_TAG | $PROGRESS_CMD | bzip2 | ssh -i $SSH_KEY root@$SERVER_IP 'bunzip2 | docker load'
+docker save $TAG $LATEST_TAG | $PROGRESS_CMD | bzip2 | ssh -i $SSH_KEY $SSH_USER@$SERVER_IP 'bunzip2 | docker load'
 
 echo "✅ Image built and transferred: $TAG"
 echo "📝 Built using $ENV_FILE"
 echo ""
 echo "🔧 Next steps on server:"
-echo "   1. SSH to server: ssh -i $SSH_KEY root@$SERVER_IP"
+echo "   1. SSH to server: ssh -i $SSH_KEY $SSH_USER@$SERVER_IP"
 echo "   2. Navigate to: cd /opt/hcktplanet/homework-tracker"
 echo "   3. Update docker-compose.yml to use: $TAG"
 echo "   4. Deploy: docker-compose up -d"
