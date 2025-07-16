@@ -35,6 +35,7 @@ export default function AdminDashboard() {
   const [showArchived, setShowArchived] = useState(false)
   const [searchEmail, setSearchEmail] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [jobOpeningFilter, setJobOpeningFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 10
 
@@ -187,6 +188,10 @@ export default function AdminDashboard() {
       const candidateStatus = getStatus(candidate)
       return candidateStatus === statusFilter
     })
+    .filter(candidate => {
+      if (jobOpeningFilter === 'all') return true
+      return candidate.job_opening?.id === jobOpeningFilter
+    })
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
   const totalPages = Math.ceil(filteredCandidates.length / ITEMS_PER_PAGE)
@@ -198,7 +203,7 @@ export default function AdminDashboard() {
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchEmail, showArchived, statusFilter])
+  }, [searchEmail, showArchived, statusFilter, jobOpeningFilter])
 
   // Calculate statistics
   const totalCandidates = candidates.length
@@ -421,6 +426,16 @@ export default function AdminDashboard() {
                   <option value="Not Started">Not Started</option>
                   <option value="In Progress">In Progress</option>
                   <option value="Completed">Completed</option>
+                </select>
+                <select
+                  value={jobOpeningFilter}
+                  onChange={(e) => setJobOpeningFilter(e.target.value)}
+                  className="border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
+                >
+                  <option value="all">All Job Openings</option>
+                  {jobOpenings.map(job => (
+                    <option key={job.id} value={job.id}>{job.name}</option>
+                  ))}
                 </select>
               </div>
               <div className="text-sm text-gray-500">
