@@ -2,6 +2,8 @@ services:
   homework-tracker:
     image: hcktplanet/homework-tracker:latest
     container_name: homework-tracker
+    ports:
+      - "80:3000"
     env_file:
       - .env
     environment:

@@ -20,7 +20,7 @@ export async function GET() {
     const candidates = await prisma.user.findMany({
       where: { is_admin: false },
       include: { job_opening: true },
-      orderBy: { email: 'asc' }
+      orderBy: { created_at: 'desc' }
     })
 
     return NextResponse.json(candidates)

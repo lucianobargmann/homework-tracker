@@ -19,6 +19,7 @@ interface User {
   github_link?: string
   prompts_used?: string
   archived: boolean
+  created_at: string
 }
 
 export default function AdminDashboard() {
@@ -32,6 +33,10 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(false)
   const [selectedPrompts, setSelectedPrompts] = useState<{email: string, prompts: string} | null>(null)
   const [showArchived, setShowArchived] = useState(false)
+  const [searchEmail, setSearchEmail] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 10
 
   useEffect(() => {
     fetchJobOpenings()
@@ -130,7 +135,6 @@ export default function AdminDashboard() {
 
       if (response.ok) {
         setNewCandidateEmail('')
-        setSelectedJobId('')
         fetchCandidates()
       }
     } catch (error) {
@@ -174,10 +178,147 @@ export default function AdminDashboard() {
     return `${diffHours}h ${diffMinutes}m`
   }
 
+  // Filter, sort, and paginate candidates
+  const filteredCandidates = candidates
+    .filter(candidate => showArchived || !candidate.archived)
+    .filter(candidate => candidate.email.toLowerCase().includes(searchEmail.toLowerCase()))
+    .filter(candidate => {
+      if (statusFilter === 'all') return true
+      const candidateStatus = getStatus(candidate)
+      return candidateStatus === statusFilter
+    })
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+  const totalPages = Math.ceil(filteredCandidates.length / ITEMS_PER_PAGE)
+  const paginatedCandidates = filteredCandidates.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  )
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchEmail, showArchived, statusFilter])
+
+  // Calculate statistics
+  const totalCandidates = candidates.length
+  const activeCandidates = candidates.filter(c => !c.archived).length
+  const archivedCandidates = candidates.filter(c => c.archived).length
+  const notStartedCount = candidates.filter(c => !c.archived && getStatus(c) === 'Not Started').length
+  const inProgressCount = candidates.filter(c => !c.archived && getStatus(c) === 'In Progress').length
+  const completedCount = candidates.filter(c => !c.archived && getStatus(c) === 'Completed').length
+  const totalJobOpenings = jobOpenings.length
+  const avgCompletionTime = candidates
+    .filter(c => c.started_at && c.submitted_at)
+    .reduce((total, c) => {
+      const start = new Date(c.started_at!)
+      const end = new Date(c.submitted_at!)
+      return total + (end.getTime() - start.getTime())
+    }, 0) / candidates.filter(c => c.started_at && c.submitted_at).length
+
+  const formatAvgTime = (ms: number) => {
+    if (isNaN(ms)) return '0h 0m'
+    const hours = Math.floor(ms / (1000 * 60 * 60))
+    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60))
+    return `${hours}h ${minutes}m`
+  }
+
   return (
     <div className="px-4 py-6 sm:px-0">
       <div className="border-4 border-dashed border-gray-200 rounded-lg p-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-8">Admin Dashboard</h1>
+        
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-sm font-bold">📊</span>
+                </div>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-blue-600">Total Candidates</p>
+                <p className="text-2xl font-bold text-blue-900">{totalCandidates}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-sm font-bold">✅</span>
+                </div>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-green-600">Completed</p>
+                <p className="text-2xl font-bold text-green-900">{completedCount}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-sm font-bold">⏳</span>
+                </div>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-yellow-600">In Progress</p>
+                <p className="text-2xl font-bold text-yellow-900">{inProgressCount}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-sm font-bold">⏱️</span>
+                </div>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-purple-600">Avg. Time</p>
+                <p className="text-2xl font-bold text-purple-900">{formatAvgTime(avgCompletionTime)}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Secondary Stats Row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Not Started</p>
+                <p className="text-xl font-bold text-gray-900">{notStartedCount}</p>
+              </div>
+              <div className="text-gray-400">🔄</div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Job Openings</p>
+                <p className="text-xl font-bold text-gray-900">{totalJobOpenings}</p>
+              </div>
+              <div className="text-gray-400">💼</div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Archived</p>
+                <p className="text-xl font-bold text-gray-900">{archivedCandidates}</p>
+              </div>
+              <div className="text-gray-400">📦</div>
+            </div>
+          </div>
+        </div>
         
         {/* Create Job Opening */}
         <div className="mb-8 bg-white p-6 rounded-lg shadow">
@@ -209,7 +350,12 @@ export default function AdminDashboard() {
               type="email"
               placeholder="Candidate email"
               value={newCandidateEmail}
-              onChange={(e) => setNewCandidateEmail(e.target.value)}
+              onChange={(e) => setNewCandidateEmail(e.target.value.trim())}
+              onPaste={(e) => {
+                e.preventDefault()
+                const pastedText = e.clipboardData.getData('text').trim()
+                setNewCandidateEmail(pastedText)
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && newCandidateEmail.trim() && selectedJobId) {
                   e.preventDefault()
@@ -244,17 +390,43 @@ export default function AdminDashboard() {
 
         {/* Candidates Table */}
         <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <h2 className="text-lg font-medium text-gray-900">Candidate Status</h2>
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                checked={showArchived}
-                onChange={(e) => setShowArchived(e.target.checked)}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mr-2"
-              />
-              <span className="text-sm text-gray-700">Show archived candidates</span>
-            </label>
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium text-gray-900">Candidate Status</h2>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={showArchived}
+                  onChange={(e) => setShowArchived(e.target.checked)}
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mr-2"
+                />
+                <span className="text-sm text-gray-700">Show archived candidates</span>
+              </label>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <input
+                  type="text"
+                  placeholder="Search by email..."
+                  value={searchEmail}
+                  onChange={(e) => setSearchEmail(e.target.value)}
+                  className="border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white placeholder-gray-500 w-64"
+                />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
+                >
+                  <option value="all">All Status</option>
+                  <option value="Not Started">Not Started</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Completed">Completed</option>
+                </select>
+              </div>
+              <div className="text-sm text-gray-500">
+                Showing {paginatedCandidates.length} of {filteredCandidates.length} candidates
+              </div>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -279,14 +451,15 @@ export default function AdminDashboard() {
                     Prompts Used
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Created At
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Archive
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {candidates
-                  .filter(candidate => showArchived || !candidate.archived)
-                  .map((candidate) => (
+                {paginatedCandidates.map((candidate) => (
                   <tr key={candidate.id} className={candidate.archived ? 'opacity-50' : ''}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {candidate.email}
@@ -336,6 +509,9 @@ export default function AdminDashboard() {
                         '-'
                       )}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(candidate.created_at).toLocaleDateString()} {new Date(candidate.created_at).toLocaleTimeString()}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <input
                         type="checkbox"
@@ -349,6 +525,42 @@ export default function AdminDashboard() {
               </tbody>
             </table>
           </div>
+          {totalPages > 1 && (
+            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+              <div className="text-sm text-gray-700">
+                Page {currentPage} of {totalPages}
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                {[...Array(totalPages)].map((_, i) => (
+                  <button
+                    key={i + 1}
+                    onClick={() => setCurrentPage(i + 1)}
+                    className={`px-3 py-1 border rounded-md text-sm ${
+                      currentPage === i + 1
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

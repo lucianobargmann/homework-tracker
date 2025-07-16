@@ -1,21 +1,37 @@
 import nodemailer from 'nodemailer'
 
+// Check if SMTP credentials are provided, otherwise default to Mailpit
+const hasSmtpCredentials = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
+
 // Debug SMTP environment variables
 console.log('🔧 SMTP Configuration Debug:')
 console.log('SMTP_HOST:', process.env.SMTP_HOST || 'NOT SET')
-console.log('SMTP_PORT:', process.env.SMTP_PORT || 'NOT SET (defaulting to 587)')
+console.log('SMTP_PORT:', process.env.SMTP_PORT || 'NOT SET')
 console.log('SMTP_USER:', process.env.SMTP_USER || 'NOT SET')
 console.log('SMTP_PASS:', process.env.SMTP_PASS ? '***HIDDEN***' : 'NOT SET')
 console.log('SMTP_FROM:', process.env.SMTP_FROM || 'NOT SET')
+console.log('Using Mailpit fallback:', !hasSmtpCredentials)
 
-const smtpConfig = {
+const smtpConfig = hasSmtpCredentials ? {
+  // Production SMTP configuration
   host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT || '587'),
   secure: parseInt(process.env.SMTP_PORT || '587') === 465, // true for 465, false for other ports
-  auth: process.env.SMTP_USER ? {
+  auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
-  } : undefined,
+  },
+  // Add timeout and debugging options
+  connectionTimeout: 30000, // 30 seconds
+  greetingTimeout: 10000, // 10 seconds
+  logger: false, // Set to true for detailed SMTP logs
+  debug: false, // Set to true for debug output
+} : {
+  // Mailpit configuration for development/testing
+  host: 'localhost',
+  port: 1025,
+  secure: false,
+  auth: undefined,
   // Add timeout and debugging options
   connectionTimeout: 30000, // 30 seconds
   greetingTimeout: 10000, // 10 seconds
@@ -41,7 +57,7 @@ transporter.verify((error, success) => {
 
 export async function sendMagicLinkEmail(email: string, url: string) {
   const mailOptions = {
-    from: process.env.SMTP_FROM,
+    from: process.env.SMTP_FROM || 'noreply@homework-tracker.local',
     to: email,
     subject: 'MetaCTO - Sign in to Homework Tracker',
     html: `

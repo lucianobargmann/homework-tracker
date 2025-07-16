@@ -4,19 +4,26 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import { prisma } from './db'
 import { sendMagicLinkEmail } from './email'
 
+// Check if SMTP credentials are provided, otherwise default to Mailpit
+const hasSmtpCredentials = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
     EmailProvider({
-      server: {
+      server: hasSmtpCredentials ? {
         host: process.env.SMTP_HOST,
         port: parseInt(process.env.SMTP_PORT || '587'),
-        auth: process.env.SMTP_USER ? {
+        auth: {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS,
-        } : undefined,
+        },
+      } : {
+        host: 'localhost',
+        port: 1025,
+        auth: undefined,
       },
-      from: process.env.SMTP_FROM,
+      from: process.env.SMTP_FROM || 'noreply@homework-tracker.local',
       sendVerificationRequest: async ({ identifier: email, url }) => {
         await sendMagicLinkEmail(email, url)
       },
