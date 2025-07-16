@@ -31,6 +31,7 @@ export default function AdminDashboard() {
   const [selectedJobId, setSelectedJobId] = useState('')
   const [loading, setLoading] = useState(false)
   const [selectedPrompts, setSelectedPrompts] = useState<{email: string, prompts: string} | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
 
   useEffect(() => {
     fetchJobOpenings()
@@ -209,6 +210,12 @@ export default function AdminDashboard() {
               placeholder="Candidate email"
               value={newCandidateEmail}
               onChange={(e) => setNewCandidateEmail(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newCandidateEmail.trim() && selectedJobId) {
+                  e.preventDefault()
+                  createCandidate(e as any)
+                }
+              }}
               className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white placeholder-gray-500"
               disabled={loading}
             />
@@ -237,8 +244,17 @@ export default function AdminDashboard() {
 
         {/* Candidates Table */}
         <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
             <h2 className="text-lg font-medium text-gray-900">Candidate Status</h2>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={showArchived}
+                onChange={(e) => setShowArchived(e.target.checked)}
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mr-2"
+              />
+              <span className="text-sm text-gray-700">Show archived candidates</span>
+            </label>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -268,7 +284,9 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {candidates.map((candidate) => (
+                {candidates
+                  .filter(candidate => showArchived || !candidate.archived)
+                  .map((candidate) => (
                   <tr key={candidate.id} className={candidate.archived ? 'opacity-50' : ''}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {candidate.email}

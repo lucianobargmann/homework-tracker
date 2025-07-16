@@ -69,7 +69,27 @@ export async function POST(request: NextRequest) {
     })
 
     if (existingUser) {
-      return NextResponse.json({ error: 'User already exists' }, { status: 400 })
+      // If user exists with the same job opening, return error
+      if (existingUser.job_opening_id === job_opening_id) {
+        return NextResponse.json({ error: 'User already exists in this job opening' }, { status: 400 })
+      }
+      
+      // If user exists but has a different job opening, update their job opening
+      const updatedUser = await prisma.user.update({
+        where: { email: email.trim().toLowerCase() },
+        data: {
+          job_opening_id,
+          // Reset their progress when assigned to new job opening
+          started_at: null,
+          submitted_at: null,
+          github_link: null,
+          prompts_used: null,
+          archived: false
+        },
+        include: { job_opening: true }
+      })
+      
+      return NextResponse.json(updatedUser)
     }
 
     const candidate = await prisma.user.create({
