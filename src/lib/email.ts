@@ -1,13 +1,42 @@
 import nodemailer from 'nodemailer'
 
-const transporter = nodemailer.createTransport({
+// Debug SMTP environment variables
+console.log('🔧 SMTP Configuration Debug:')
+console.log('SMTP_HOST:', process.env.SMTP_HOST || 'NOT SET')
+console.log('SMTP_PORT:', process.env.SMTP_PORT || 'NOT SET (defaulting to 587)')
+console.log('SMTP_USER:', process.env.SMTP_USER || 'NOT SET')
+console.log('SMTP_PASS:', process.env.SMTP_PASS ? '***HIDDEN***' : 'NOT SET')
+console.log('SMTP_FROM:', process.env.SMTP_FROM || 'NOT SET')
+
+const smtpConfig = {
   host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false, // true for 465, false for other ports
+  secure: parseInt(process.env.SMTP_PORT || '587') === 465, // true for 465, false for other ports
   auth: process.env.SMTP_USER ? {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   } : undefined,
+  // Add timeout and debugging options
+  connectionTimeout: 30000, // 30 seconds
+  greetingTimeout: 10000, // 10 seconds
+  logger: false, // Set to true for detailed SMTP logs
+  debug: false, // Set to true for debug output
+}
+
+console.log('📧 Creating SMTP transporter with config:', {
+  ...smtpConfig,
+  auth: smtpConfig.auth ? { user: smtpConfig.auth.user, pass: '***HIDDEN***' } : undefined
+})
+
+const transporter = nodemailer.createTransport(smtpConfig)
+
+// Verify SMTP connection on startup
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('❌ SMTP connection verification failed:', error)
+  } else {
+    console.log('✅ SMTP server connection verified successfully')
+  }
 })
 
 export async function sendMagicLinkEmail(email: string, url: string) {
@@ -66,10 +95,23 @@ export async function sendMagicLinkEmail(email: string, url: string) {
   }
 
   try {
-    await transporter.sendMail(mailOptions)
-    console.log('Magic link email sent to:', email)
-  } catch (error) {
-    console.error('Error sending email:', error)
+    const info = await transporter.sendMail(mailOptions)
+    console.log('✅ Magic link email sent successfully!')
+    console.log('Message ID:', info.messageId)
+    console.log('Response:', info.response)
+    console.log('Sent to:', email)
+  } catch (error: any) {
+    console.error('❌ Error sending email:', error)
+    console.error('Error code:', error.code)
+    console.error('SMTP Response:', error.response)
+    console.error('Response code:', error.responseCode)
+    console.error('Command:', error.command)
+    
+    // Log additional details for debugging
+    if (error.response) {
+      console.error('Full SMTP error response:', error.response)
+    }
+    
     throw error
   }
 }
