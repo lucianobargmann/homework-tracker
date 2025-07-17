@@ -28,8 +28,8 @@ const smtpConfig = hasSmtpCredentials ? {
   debug: false, // Set to true for debug output
 } : {
   // Mailpit configuration for development/testing
-  host: 'localhost',
-  port: 1025,
+  host: process.env.SMTP_HOST || 'localhost',
+  port: parseInt(process.env.SMTP_PORT || '1025'),
   secure: false,
   auth: undefined,
   // Add timeout and debugging options

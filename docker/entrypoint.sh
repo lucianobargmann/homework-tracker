@@ -1,9 +1,9 @@
 #!/bin/sh
-# Generate Prisma client
-echo "Generating Prisma client..."
-npx prisma generate
+# Ensure data directory exists (should already have correct permissions)
+mkdir -p /app/data
 
-# Run migrations if they exist, otherwise just start the server
+# Prisma client should already be generated during build
+# Only run migrations if they exist
 if [ -d "/app/prisma/migrations" ]; then
   echo "Running Prisma migrations..."
   npx prisma migrate deploy
