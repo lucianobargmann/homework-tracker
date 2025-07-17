@@ -32,6 +32,8 @@ model User {
   github_link    String?
   prompts_used   String?
   archived       Boolean     @default(false)
+  approval_status String?    // null, "approving", "approved", "rejected"
+  approved_at     DateTime?
   created_at     DateTime    @default(now())
   job_opening    JobOpening? @relation(fields: [job_opening_id], references: [id])
 

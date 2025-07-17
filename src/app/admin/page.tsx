@@ -10,6 +10,15 @@ interface JobOpening {
   created_at: string
 }
 
+interface ScoringResult {
+  id: string
+  total_score: number
+  max_score: number
+  percentage: number
+  report_data: string
+  created_at: string
+}
+
 interface User {
   id: string
   email: string
@@ -19,7 +28,10 @@ interface User {
   github_link?: string
   prompts_used?: string
   archived: boolean
+  approval_status?: string | null
+  approved_at?: string
   created_at: string
+  scoring_results?: ScoringResult[]
 }
 
 export default function AdminDashboard() {
@@ -44,6 +56,9 @@ export default function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [jobOpeningFilter, setJobOpeningFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
+  const [sortField, setSortField] = useState<string>('created_at')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [approvingCandidates, setApprovingCandidates] = useState<Set<string>>(new Set())
   const ITEMS_PER_PAGE = 10
 
   useEffect(() => {
@@ -250,10 +265,62 @@ export default function AdminDashboard() {
     }
   }
 
+  const approveCandidate = async (candidateId: string, candidateEmail: string) => {
+    if (!confirm(`Are you sure you want to approve ${candidateEmail}? This will send an approval email in 5 minutes.`)) {
+      return
+    }
+
+    try {
+      setApprovingCandidates(prev => new Set(prev).add(candidateId))
+      
+      const response = await fetch(`/api/admin/candidates/${candidateId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        alert(`Approval process started for ${candidateEmail}. Email will be sent in 5 minutes.`)
+        fetchCandidates() // Refresh to show updated status
+      } else {
+        alert(`Error approving candidate: ${data.error}`)
+        setApprovingCandidates(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(candidateId)
+          return newSet
+        })
+      }
+    } catch (error) {
+      console.error('Error approving candidate:', error)
+      alert('Error approving candidate')
+      setApprovingCandidates(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(candidateId)
+        return newSet
+      })
+    }
+  }
+
   const getStatus = (candidate: User) => {
     if (!candidate.started_at) return 'Not Started'
     if (candidate.started_at && !candidate.submitted_at) return 'In Progress'
+    if (candidate.submitted_at && !candidate.approval_status) return 'Completed'
+    if (candidate.approval_status === 'approving') return 'Approving...'
+    if (candidate.approval_status === 'approved') return 'Approved'
+    if (candidate.approval_status === 'rejected') return 'Rejected'
     return 'Completed'
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Approved': return 'bg-green-100 text-green-800'
+      case 'Approving...': return 'bg-blue-100 text-blue-800'
+      case 'Rejected': return 'bg-red-100 text-red-800'
+      case 'Completed': return 'bg-green-100 text-green-800'
+      case 'In Progress': return 'bg-yellow-100 text-yellow-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
   }
 
   const getTimeTaken = (candidate: User) => {
@@ -266,6 +333,37 @@ export default function AdminDashboard() {
     const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
     
     return `${diffHours}h ${diffMinutes}m`
+  }
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('asc')
+    }
+  }
+
+  const getSortValue = (candidate: User, field: string): any => {
+    switch (field) {
+      case 'email':
+        return candidate.email.toLowerCase()
+      case 'job_opening':
+        return candidate.job_opening?.name || ''
+      case 'status':
+        return getStatus(candidate)
+      case 'time_taken':
+        if (!candidate.started_at || !candidate.submitted_at) return 0
+        return new Date(candidate.submitted_at).getTime() - new Date(candidate.started_at).getTime()
+      case 'created_at':
+        return new Date(candidate.created_at).getTime()
+      case 'ai_score':
+        return candidate.scoring_results && candidate.scoring_results.length > 0 
+          ? candidate.scoring_results[0].percentage 
+          : -1
+      default:
+        return new Date(candidate.created_at).getTime()
+    }
   }
 
   // Filter, sort, and paginate candidates
@@ -281,7 +379,15 @@ export default function AdminDashboard() {
       if (jobOpeningFilter === 'all') return true
       return candidate.job_opening?.id === jobOpeningFilter
     })
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .sort((a, b) => {
+      const aValue = getSortValue(a, sortField)
+      const bValue = getSortValue(b, sortField)
+      
+      if (aValue === bValue) return 0
+      
+      const comparison = aValue < bValue ? -1 : 1
+      return sortDirection === 'asc' ? comparison : -comparison
+    })
 
   const totalPages = Math.ceil(filteredCandidates.length / ITEMS_PER_PAGE)
   const paginatedCandidates = filteredCandidates.slice(
@@ -289,10 +395,10 @@ export default function AdminDashboard() {
     currentPage * ITEMS_PER_PAGE
   )
 
-  // Reset to first page when filters change
+  // Reset to first page when filters or sorting change
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchEmail, showArchived, statusFilter, jobOpeningFilter])
+  }, [searchEmail, showArchived, statusFilter, jobOpeningFilter, sortField, sortDirection])
 
   // Calculate statistics
   const totalCandidates = candidates.length
@@ -315,6 +421,25 @@ export default function AdminDashboard() {
     const hours = Math.floor(ms / (1000 * 60 * 60))
     const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60))
     return `${hours}h ${minutes}m`
+  }
+
+  const SortableHeader = ({ field, children }: { field: string; children: React.ReactNode }) => {
+    const isActive = sortField === field
+    return (
+      <th 
+        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+        onClick={() => handleSort(field)}
+      >
+        <div className="flex items-center gap-1">
+          {children}
+          {isActive && (
+            <span className="text-blue-500">
+              {sortDirection === 'asc' ? '↑' : '↓'}
+            </span>
+          )}
+        </div>
+      </th>
+    )
   }
 
   return (
@@ -536,30 +661,30 @@ export default function AdminDashboard() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <SortableHeader field="email">
                     Email
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  </SortableHeader>
+                  <SortableHeader field="job_opening">
                     Job Opening
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  </SortableHeader>
+                  <SortableHeader field="status">
                     Status
-                  </th>
+                  </SortableHeader>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     GitHub Link
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <SortableHeader field="time_taken">
                     Time Taken
-                  </th>
+                  </SortableHeader>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Prompts Used
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <SortableHeader field="created_at">
                     Created At
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  </SortableHeader>
+                  <SortableHeader field="ai_score">
                     AI Score
-                  </th>
+                  </SortableHeader>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
@@ -608,13 +733,7 @@ export default function AdminDashboard() {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        getStatus(candidate) === 'Completed' 
-                          ? 'bg-green-100 text-green-800'
-                          : getStatus(candidate) === 'In Progress'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(getStatus(candidate))}`}>
                         {getStatus(candidate)}
                       </span>
                     </td>
@@ -655,10 +774,24 @@ export default function AdminDashboard() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {candidate.github_link ? (
                         <div className="flex flex-col gap-1">
-                          {scoringResults[candidate.id] ? (
+                          {candidate.scoring_results && candidate.scoring_results.length > 0 ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-green-600 font-semibold">
+                                {candidate.scoring_results[0].percentage.toFixed(1)}% 
+                                <span className="text-gray-500 text-xs ml-1">(Auto)</span>
+                              </span>
+                              <button
+                                onClick={() => viewScoringDetails(JSON.parse(candidate.scoring_results![0].report_data))}
+                                className="text-blue-600 hover:text-blue-800 text-xs"
+                              >
+                                View Details
+                              </button>
+                            </div>
+                          ) : scoringResults[candidate.id] ? (
                             <div className="flex items-center gap-2">
                               <span className="text-green-600 font-semibold">
                                 {scoringResults[candidate.id].percentage.toFixed(1)}%
+                                <span className="text-gray-500 text-xs ml-1">(Manual)</span>
                               </span>
                               <button
                                 onClick={() => viewScoringDetails(scoringResults[candidate.id])}
@@ -698,13 +831,40 @@ export default function AdminDashboard() {
                           </button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <button
                             onClick={() => startEditCandidate(candidate)}
                             className="text-blue-600 hover:text-blue-800 text-xs"
                           >
                             Edit
                           </button>
+                          
+                          {/* Approval button - only show for completed candidates who haven't been approved yet */}
+                          {candidate.submitted_at && 
+                           !candidate.approval_status && 
+                           candidate.github_link && (
+                            <button
+                              onClick={() => approveCandidate(candidate.id, candidate.email)}
+                              disabled={approvingCandidates.has(candidate.id)}
+                              className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {approvingCandidates.has(candidate.id) ? 'Approving...' : 'Approve'}
+                            </button>
+                          )}
+
+                          {/* Show approval status for candidates in process or approved */}
+                          {candidate.approval_status === 'approving' && (
+                            <span className="text-blue-600 text-xs font-medium">
+                              Approving...
+                            </span>
+                          )}
+                          
+                          {candidate.approval_status === 'approved' && (
+                            <span className="text-green-600 text-xs font-medium">
+                              ✅ Approved
+                            </span>
+                          )}
+
                           <input
                             type="checkbox"
                             checked={candidate.archived}

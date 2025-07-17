@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { submissionAttempts, RATE_LIMIT_WINDOW, MAX_ATTEMPTS } from '@/lib/rate-limiter'
+import { ScoringEngine } from '@/lib/scoring-engine'
 
 export async function POST(request: NextRequest) {
   try {
@@ -123,6 +124,30 @@ export async function POST(request: NextRequest) {
           submitted_at: new Date()
         }
       })
+
+      // Trigger automatic scoring in background (non-blocking)
+      try {
+        const scoringEngine = new ScoringEngine()
+        const scoringResult = await scoringEngine.scoreRepository(github_link.trim(), prompts_used.trim())
+        
+        // Save scoring result to database
+        await prisma.scoringResult.create({
+          data: {
+            user_id: user.id,
+            github_url: github_link.trim(),
+            total_score: scoringResult.totalScore,
+            max_score: scoringResult.maxScore,
+            percentage: scoringResult.percentage,
+            report_data: JSON.stringify(scoringResult)
+          }
+        })
+        
+        console.log(`✅ Automatic scoring completed for user ${user.email}: ${scoringResult.percentage.toFixed(1)}%`)
+      } catch (scoringError) {
+        // Log error but don't fail the submission
+        console.error('❌ Error during automatic scoring:', scoringError)
+        console.log('📝 Submission still successful, scoring can be done manually later')
+      }
 
       return NextResponse.json({
         success: true,

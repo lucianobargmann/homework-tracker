@@ -19,7 +19,13 @@ export async function GET() {
 
     const candidates = await prisma.user.findMany({
       where: { is_admin: false },
-      include: { job_opening: true },
+      include: { 
+        job_opening: true,
+        scoring_results: {
+          orderBy: { created_at: 'desc' },
+          take: 1 // Only get the most recent scoring result
+        }
+      },
       orderBy: { created_at: 'desc' }
     })
 
