@@ -2,6 +2,7 @@
 
 # Homework Tracker Deployment Script with Auto-Rollback
 # Usage: ./deploy.sh [IMAGE_TAG]
+#        ./deploy.sh rollback  (to manually rollback to backup)
 
 set -e  # Exit on any error
 
@@ -11,6 +12,11 @@ IDENTITY_FILE="~/.ssh/metacto-aws-lbargmann.pem"
 USER="ec2-user"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 ROLLBACK_TIMEOUT=60  # seconds to wait for smoke test
+
+# Check for rollback command
+if [ "$1" = "rollback" ] || [ "$1" = "--rollback" ]; then
+    rollback_deployment
+fi
 
 # Get image tag from argument or use latest built image
 if [ -n "$1" ]; then
@@ -57,6 +63,34 @@ print_error() {
     echo -e "${RED}❌ $1${NC}"
 }
 
+rollback_deployment() {
+    print_step "Performing manual rollback to backup image..."
+    
+    # Check if backup image exists
+    BACKUP_EXISTS=$(ssh -o StrictHostKeyChecking=no -i "$IDENTITY_FILE" "$USER@$SERVER" \
+        "docker images hcktplanet/homework-tracker:backup -q" || echo "")
+    
+    if [ -z "$BACKUP_EXISTS" ]; then
+        print_error "No backup image found on remote server"
+        exit 1
+    fi
+    
+    # Stop current containers
+    ssh -o StrictHostKeyChecking=no -i "$IDENTITY_FILE" "$USER@$SERVER" \
+        "cd /home/$USER && docker compose -f docker-compose.ec2.yml down"
+    
+    # Tag backup as latest
+    ssh -o StrictHostKeyChecking=no -i "$IDENTITY_FILE" "$USER@$SERVER" \
+        "docker tag hcktplanet/homework-tracker:backup hcktplanet/homework-tracker:latest"
+    
+    # Restart with backup
+    ssh -o StrictHostKeyChecking=no -i "$IDENTITY_FILE" "$USER@$SERVER" \
+        "cd /home/$USER && docker compose -f docker-compose.ec2.yml up -d"
+    
+    print_success "Manual rollback completed"
+    exit 0
+}
+
 # Expand tilde in identity file path
 IDENTITY_FILE="${IDENTITY_FILE/#\~/$HOME}"
 
@@ -78,7 +112,14 @@ CURRENT_IMAGE=$(ssh -o StrictHostKeyChecking=no -i "$IDENTITY_FILE" "$USER@$SERV
 
 if [ -n "$CURRENT_IMAGE" ]; then
     print_success "Current image captured: $CURRENT_IMAGE"
-    ROLLBACK_IMAGE="$CURRENT_IMAGE"
+    
+    # Tag current image as backup on remote server
+    print_step "Creating backup tag on remote server..."
+    ssh -o StrictHostKeyChecking=no -i "$IDENTITY_FILE" "$USER@$SERVER" \
+        "docker tag $CURRENT_IMAGE hcktplanet/homework-tracker:backup"
+    print_success "Current image tagged as :backup"
+    
+    ROLLBACK_IMAGE="hcktplanet/homework-tracker:backup"
 else
     print_warning "No current container found - fresh deployment"
     ROLLBACK_IMAGE=""
@@ -90,24 +131,30 @@ print_step "Creating database backup before deployment..."
 BACKUP_FILE="homework-db-backup-$TIMESTAMP.tar.gz"
 print_success "Database backup completed: $BACKUP_FILE"
 
-# Step 3: Transfer new image to server
-print_step "Transferring new image to server..."
-IMAGE_SIZE=$(docker image inspect hcktplanet/homework-tracker:$NEW_IMAGE_TAG --format='{{.Size}}' | awk '{printf "%.1f MB", $1/1024/1024}')
+# Step 3: Build and tag latest image locally if needed
+print_step "Ensuring latest image is built and tagged..."
+if ! docker image inspect hcktplanet/homework-tracker:latest >/dev/null 2>&1; then
+    echo "Building latest image..."
+    docker build -t hcktplanet/homework-tracker:latest .
+fi
+
+# Tag the timestamped version as latest locally
+docker tag hcktplanet/homework-tracker:$NEW_IMAGE_TAG hcktplanet/homework-tracker:latest
+print_success "Latest image tagged locally"
+
+# Step 4: Transfer latest image to server
+print_step "Transferring latest image to server..."
+IMAGE_SIZE=$(docker image inspect hcktplanet/homework-tracker:latest --format='{{.Size}}' | awk '{printf "%.1f MB", $1/1024/1024}')
 echo "📊 Image size: $IMAGE_SIZE"
 
 if command -v pv >/dev/null 2>&1; then
     echo -e "${PURPLE}📍 Using pv for transfer progress${NC}"
-    docker save hcktplanet/homework-tracker:$NEW_IMAGE_TAG | pv | ssh -o StrictHostKeyChecking=no -i "$IDENTITY_FILE" "$USER@$SERVER" "docker load"
+    docker save hcktplanet/homework-tracker:latest | pv | ssh -o StrictHostKeyChecking=no -i "$IDENTITY_FILE" "$USER@$SERVER" "docker load"
 else
-    docker save hcktplanet/homework-tracker:$NEW_IMAGE_TAG | ssh -o StrictHostKeyChecking=no -i "$IDENTITY_FILE" "$USER@$SERVER" "docker load"
+    docker save hcktplanet/homework-tracker:latest | ssh -o StrictHostKeyChecking=no -i "$IDENTITY_FILE" "$USER@$SERVER" "docker load"
 fi
-print_success "Image transferred successfully"
-
-# Step 4: Tag image as latest on remote server
-print_step "Tagging image as latest on remote server..."
-ssh -o StrictHostKeyChecking=no -i "$IDENTITY_FILE" "$USER@$SERVER" \
-    "docker tag hcktplanet/homework-tracker:$NEW_IMAGE_TAG hcktplanet/homework-tracker:latest"
-print_success "Image tagged as latest"
+print_success "Latest image transferred successfully"
+print_success "Ready for deployment - using latest image"
 
 # Step 5: Deploy new version
 print_step "Deploying new version..."
@@ -213,13 +260,19 @@ else
     if [ -n "$ROLLBACK_IMAGE" ]; then
         print_step "Rolling back to previous image: $ROLLBACK_IMAGE"
         
-        # Update docker-compose to use previous image
+        # Stop current containers
         ssh -o StrictHostKeyChecking=no -i "$IDENTITY_FILE" "$USER@$SERVER" \
-            "cd /home/$USER && sed -i 's|image: hcktplanet/homework-tracker:.*|image: $ROLLBACK_IMAGE|' docker-compose.ec2.yml"
+            "cd /home/$USER && docker compose -f docker-compose.ec2.yml down"
         
-        # Restart with previous image
+        # Tag backup image as latest for rollback
         ssh -o StrictHostKeyChecking=no -i "$IDENTITY_FILE" "$USER@$SERVER" \
-            "cd /home/$USER && docker compose -f docker-compose.ec2.yml down && docker compose -f docker-compose.ec2.yml up -d"
+            "docker tag $ROLLBACK_IMAGE hcktplanet/homework-tracker:latest"
+        
+        # Restart with rolled back image (docker-compose should use :latest)
+        ssh -o StrictHostKeyChecking=no -i "$IDENTITY_FILE" "$USER@$SERVER" \
+            "cd /home/$USER && docker compose -f docker-compose.ec2.yml up -d"
+        
+        print_success "Rollback deployment completed"
         
         # Restore database backup
         print_step "Restoring database from backup..."
