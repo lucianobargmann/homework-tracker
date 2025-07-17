@@ -1,6 +1,6 @@
 #!/bin/sh
-# Ensure data directory exists (should already have correct permissions)
-mkdir -p /app/data
+# Ensure database directory exists (should already have correct permissions)
+mkdir -p /app/database
 
 # Prisma client should already be generated during build
 # Only run migrations if they exist

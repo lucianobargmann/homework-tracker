@@ -103,11 +103,11 @@ else
 fi
 print_success "Image transferred successfully"
 
-# Step 4: Update docker-compose configuration
-print_step "Updating docker-compose configuration..."
+# Step 4: Tag image as latest on remote server
+print_step "Tagging image as latest on remote server..."
 ssh -o StrictHostKeyChecking=no -i "$IDENTITY_FILE" "$USER@$SERVER" \
-    "cd /home/$USER && sed -i 's|image: hcktplanet/homework-tracker:.*|image: hcktplanet/homework-tracker:$NEW_IMAGE_TAG|' docker-compose.ec2.yml"
-print_success "Docker-compose configuration updated"
+    "docker tag hcktplanet/homework-tracker:$NEW_IMAGE_TAG hcktplanet/homework-tracker:latest"
+print_success "Image tagged as latest"
 
 # Step 5: Deploy new version
 print_step "Deploying new version..."

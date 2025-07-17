@@ -63,8 +63,8 @@ RUN chmod +x /app/entrypoint.sh
 RUN chmod +x /app/entrypoint-simple.sh
 
 
-# Create directories for SQLite database
-RUN mkdir -p /app/prisma /app/data && chown nextjs:nodejs /app/prisma /app/data
+# Create directories for SQLite database (separate from migrations)
+RUN mkdir -p /app/prisma /app/database && chown nextjs:nodejs /app/prisma /app/database
 
 USER nextjs
 

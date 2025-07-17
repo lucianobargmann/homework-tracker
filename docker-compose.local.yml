@@ -10,14 +10,14 @@ services:
       - NEXTAUTH_URL=http://localhost:3001
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       - SUPERADMINS=${SUPERADMINS}
-      - DATABASE_URL=file:/app/data/dev.db
+      - DATABASE_URL=file:/app/database/dev.db
       - SMTP_HOST=mailpit
       - SMTP_PORT=1025
       - SMTP_USER=
       - SMTP_PASS=
       - SMTP_FROM=homework@localhost
     volumes:
-      - homework_local_db:/app/data
+      - homework_local_db:/app/database
     depends_on:
       - mailpit
     restart: unless-stopped

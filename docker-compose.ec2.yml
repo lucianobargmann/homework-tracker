@@ -8,18 +8,16 @@ services:
       - .env.production
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=file:/app/data/prod.db
+      - DATABASE_URL=file:/app/database/prod.db
       - NEXTAUTH_URL=https://homework.metacto.com
       - SUPERADMINS=luciano.bargmann@metacto.com
     volumes:
-      - ec2-user_homework_db:/app/data
+      - ec2-user_homework_db:/app/database
     networks:
       - web
     restart: unless-stopped
 
 volumes:
-  caddy_data:
-  caddy_config:
   ec2-user_homework_db:
     external: true
 
