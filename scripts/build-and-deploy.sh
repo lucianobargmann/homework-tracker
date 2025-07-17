@@ -57,7 +57,7 @@ fi
 
 # Step 2: Build Docker image
 print_step "Building Docker image: $IMAGE_TAG"
-docker build -t "$IMAGE_TAG" .
+docker build --no-cache -t "$IMAGE_TAG" .
 
 if [ $? -eq 0 ]; then
     print_success "Docker image built successfully"
