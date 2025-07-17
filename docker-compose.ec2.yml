@@ -5,14 +5,14 @@ services:
     ports:
       - "80:3000"
     env_file:
-      - .env
+      - .env.production
     environment:
       - NODE_ENV=production
       - DATABASE_URL=file:/app/prisma/prod.db
       - NEXTAUTH_URL=https://homework.metacto.com
       - SUPERADMINS=luciano.bargmann@metacto.com
     volumes:
-      - homework_data:/app/prisma
+      - ec2-user_homework_data:/app/prisma
     networks:
       - web
     restart: unless-stopped
@@ -20,7 +20,8 @@ services:
 volumes:
   caddy_data:
   caddy_config:
-  homework_data:
+  ec2-user_homework_data:
+    external: true
 
 networks:
   web:
