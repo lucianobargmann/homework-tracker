@@ -17,7 +17,7 @@ services:
       - SMTP_PASS=
       - SMTP_FROM=homework@localhost
     volumes:
-      - homework_local_data:/app/data
+      - homework_local_db:/app/data
     depends_on:
       - mailpit
     restart: unless-stopped
@@ -31,4 +31,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  homework_local_data:
+  homework_local_db:

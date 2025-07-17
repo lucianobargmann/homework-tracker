@@ -44,9 +44,18 @@ RUN chown nextjs:nodejs .next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy Prisma files
+# Copy Prisma files ensuring all migrations are included
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+
+# Compare migration file counts between builder and runner
+RUN src_count=$(find /app/prisma/migrations -type f | wc -l) && \
+    dst_count=$(find ./prisma/migrations -type f | wc -l) && \
+    echo "📦 Prisma migrations: source=$src_count, destination=$dst_count" && \
+    if [ "$src_count" -ne "$dst_count" ]; then \
+        echo "❌ ERROR: Migration file count mismatch! Build aborted."; \
+        exit 1; \
+    fi
 
 COPY docker/entrypoint.sh /app/entrypoint.sh
 COPY docker/entrypoint-simple.sh /app/entrypoint-simple.sh
