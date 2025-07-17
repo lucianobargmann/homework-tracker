@@ -37,6 +37,7 @@ model User {
 
   accounts Account[]
   sessions Session[]
+  scoring_results ScoringResult[]
 
   @@map("users")
 }
@@ -74,4 +75,20 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model ScoringResult {
+  id          String   @id @default(uuid())
+  user_id     String
+  github_url  String
+  total_score Int
+  max_score   Int
+  percentage  Float
+  report_data String   // JSON string containing full report
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("scoring_results")
 }

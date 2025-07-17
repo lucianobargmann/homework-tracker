@@ -21,15 +21,57 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const { archived } = await request.json()
+    const body = await request.json()
 
-    if (typeof archived !== 'boolean') {
-      return NextResponse.json({ error: 'Archived must be a boolean' }, { status: 400 })
+    // Prepare update data
+    const updateData: any = {}
+
+    if (body.email !== undefined) {
+      const email = body.email.trim().toLowerCase()
+      
+      // Check if email is already taken by another user
+      const existingUser = await prisma.user.findFirst({
+        where: { 
+          email,
+          id: { not: resolvedParams.id }
+        }
+      })
+
+      if (existingUser) {
+        return NextResponse.json({ 
+          error: 'Email is already taken by another user' 
+        }, { status: 400 })
+      }
+      
+      updateData.email = email
+    }
+
+    if (body.job_opening_id !== undefined) {
+      if (body.job_opening_id === null || body.job_opening_id === '') {
+        updateData.job_opening_id = null
+      } else {
+        // Verify job opening exists
+        const jobOpening = await prisma.jobOpening.findUnique({
+          where: { id: body.job_opening_id }
+        })
+
+        if (!jobOpening) {
+          return NextResponse.json({ 
+            error: 'Job opening not found' 
+          }, { status: 400 })
+        }
+
+        updateData.job_opening_id = body.job_opening_id
+      }
+    }
+
+    if (body.archived !== undefined) {
+      updateData.archived = Boolean(body.archived)
     }
 
     const candidate = await prisma.user.update({
       where: { id: resolvedParams.id },
-      data: { archived },
+      data: updateData,
       include: { job_opening: true }
     })
 

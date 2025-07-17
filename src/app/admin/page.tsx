@@ -32,6 +32,13 @@ export default function AdminDashboard() {
   const [selectedJobId, setSelectedJobId] = useState('')
   const [loading, setLoading] = useState(false)
   const [selectedPrompts, setSelectedPrompts] = useState<{email: string, prompts: string} | null>(null)
+  const [scoringCandidate, setScoringCandidate] = useState<string | null>(null)
+  const [scoringResults, setScoringResults] = useState<{[key: string]: any}>({})
+  const [showScoringModal, setShowScoringModal] = useState(false)
+  const [selectedScoring, setSelectedScoring] = useState<any>(null)
+  const [editingCandidate, setEditingCandidate] = useState<string | null>(null)
+  const [editEmail, setEditEmail] = useState('')
+  const [editJobId, setEditJobId] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [searchEmail, setSearchEmail] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -46,6 +53,87 @@ export default function AdminDashboard() {
 
   const handleUnauthorized = () => {
     router.push('/auth/signin')
+  }
+
+  const scoreCandidate = async (userId: string, githubUrl: string, promptsText?: string) => {
+    setScoringCandidate(userId)
+    try {
+      const response = await fetch('/api/admin/score', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+          githubUrl,
+          promptsText
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setScoringResults(prev => ({
+          ...prev,
+          [userId]: data.scoringResult
+        }))
+      } else {
+        alert(`Error scoring candidate: ${data.error}`)
+      }
+    } catch (error) {
+      console.error('Error scoring candidate:', error)
+      alert('Error scoring candidate')
+    } finally {
+      setScoringCandidate(null)
+    }
+  }
+
+  const viewScoringDetails = (result: any) => {
+    setSelectedScoring(result)
+    setShowScoringModal(true)
+  }
+
+  const startEditCandidate = (candidate: User) => {
+    setEditingCandidate(candidate.id)
+    setEditEmail(candidate.email)
+    setEditJobId(candidate.job_opening?.id || '')
+  }
+
+  const cancelEdit = () => {
+    setEditingCandidate(null)
+    setEditEmail('')
+    setEditJobId('')
+  }
+
+  const saveEdit = async (candidateId: string) => {
+    try {
+      const response = await fetch(`/api/admin/candidates/${candidateId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: editEmail.trim().toLowerCase(),
+          job_opening_id: editJobId || null
+        })
+      })
+
+      if (response.ok) {
+        // Update local state
+        setCandidates(prev => prev.map(c => 
+          c.id === candidateId 
+            ? { ...c, email: editEmail.trim().toLowerCase(), job_opening: jobOpenings.find(j => j.id === editJobId) }
+            : c
+        ))
+        cancelEdit()
+      } else {
+        const data = await response.json()
+        alert(`Error updating candidate: ${data.error}`)
+      }
+    } catch (error) {
+      console.error('Error updating candidate:', error)
+      alert('Error updating candidate')
+    }
   }
 
   const fetchJobOpenings = async () => {
@@ -469,7 +557,10 @@ export default function AdminDashboard() {
                     Created At
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Archive
+                    AI Score
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
                   </th>
                 </tr>
               </thead>
@@ -477,10 +568,43 @@ export default function AdminDashboard() {
                 {paginatedCandidates.map((candidate) => (
                   <tr key={candidate.id} className={candidate.archived ? 'opacity-50' : ''}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {candidate.email}
+                      {editingCandidate === candidate.id ? (
+                        <input
+                          type="email"
+                          value={editEmail}
+                          onChange={(e) => setEditEmail(e.target.value)}
+                          className="border border-gray-300 rounded px-2 py-1 text-sm w-full"
+                          placeholder="Email"
+                        />
+                      ) : (
+                        <span 
+                          className="cursor-pointer hover:text-blue-600 hover:underline"
+                          onClick={() => startEditCandidate(candidate)}
+                        >
+                          {candidate.email}
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {candidate.job_opening?.name || '-'}
+                      {editingCandidate === candidate.id ? (
+                        <select
+                          value={editJobId}
+                          onChange={(e) => setEditJobId(e.target.value)}
+                          className="border border-gray-300 rounded px-2 py-1 text-sm w-full"
+                        >
+                          <option value="">No Job Opening</option>
+                          {jobOpenings.map(job => (
+                            <option key={job.id} value={job.id}>{job.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span 
+                          className="cursor-pointer hover:text-blue-600 hover:underline"
+                          onClick={() => startEditCandidate(candidate)}
+                        >
+                          {candidate.job_opening?.name || '-'}
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -527,13 +651,68 @@ export default function AdminDashboard() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {new Date(candidate.created_at).toLocaleDateString()} {new Date(candidate.created_at).toLocaleTimeString()}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {candidate.github_link ? (
+                        <div className="flex flex-col gap-1">
+                          {scoringResults[candidate.id] ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-green-600 font-semibold">
+                                {scoringResults[candidate.id].percentage.toFixed(1)}%
+                              </span>
+                              <button
+                                onClick={() => viewScoringDetails(scoringResults[candidate.id])}
+                                className="text-blue-600 hover:text-blue-800 text-xs"
+                              >
+                                View Details
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => scoreCandidate(candidate.id, candidate.github_link!, candidate.prompts_used || undefined)}
+                              disabled={scoringCandidate === candidate.id}
+                              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-xs disabled:opacity-50"
+                            >
+                              {scoringCandidate === candidate.id ? 'Scoring...' : 'Score AI'}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">No GitHub link</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <input
-                        type="checkbox"
-                        checked={candidate.archived}
-                        onChange={() => toggleArchive(candidate.id, candidate.archived)}
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                      />
+                      {editingCandidate === candidate.id ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => saveEdit(candidate.id)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="bg-gray-600 hover:bg-gray-700 text-white px-2 py-1 rounded text-xs"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => startEditCandidate(candidate)}
+                            className="text-blue-600 hover:text-blue-800 text-xs"
+                          >
+                            Edit
+                          </button>
+                          <input
+                            type="checkbox"
+                            checked={candidate.archived}
+                            onChange={() => toggleArchive(candidate.id, candidate.archived)}
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            title="Archive candidate"
+                          />
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -602,6 +781,103 @@ export default function AdminDashboard() {
             <div className="p-6 border-t border-gray-200 flex justify-end">
               <button
                 onClick={() => setSelectedPrompts(null)}
+                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Scoring Details Modal */}
+      {showScoringModal && selectedScoring && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-bold text-gray-900">
+                AI Challenge Scoring Report
+              </h2>
+              <button
+                onClick={() => setShowScoringModal(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-6 overflow-auto max-h-[70vh]">
+              <div className="mb-6">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="text-3xl font-bold text-green-600">
+                    {selectedScoring.percentage.toFixed(1)}%
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {selectedScoring.totalScore} / {selectedScoring.maxScore} points
+                  </div>
+                </div>
+                <div className="text-sm text-gray-500">
+                  Generated: {new Date(selectedScoring.timestamp).toLocaleString()}
+                </div>
+              </div>
+
+              {/* Categories */}
+              <div className="space-y-6">
+                {selectedScoring.categories.map((category: any, index: number) => (
+                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-lg font-semibold text-gray-900">{category.category}</h3>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">
+                          {category.score} / {category.maxScore}
+                        </span>
+                        <span className="text-sm font-medium text-blue-600">
+                          {category.percentage.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {category.subcategories.map((sub: any, subIndex: number) => (
+                        <div key={subIndex} className="bg-gray-50 rounded p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-medium text-gray-800">{sub.name}</h4>
+                            <span className="text-sm text-gray-600">
+                              {sub.score} / {sub.maxScore}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2">{sub.feedback}</p>
+                          {sub.evidence.length > 0 && (
+                            <div className="text-xs text-gray-500">
+                              <strong>Evidence:</strong>
+                              <ul className="list-disc list-inside mt-1">
+                                {sub.evidence.map((item: string, evidenceIndex: number) => (
+                                  <li key={evidenceIndex}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Recommendations */}
+              {selectedScoring.recommendations.length > 0 && (
+                <div className="mt-6 border border-yellow-200 rounded-lg p-4 bg-yellow-50">
+                  <h3 className="text-lg font-semibold text-yellow-800 mb-3">Recommendations</h3>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-yellow-700">
+                    {selectedScoring.recommendations.map((rec: string, index: number) => (
+                      <li key={index}>{rec}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => setShowScoringModal(false)}
                 className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md"
               >
                 Close
