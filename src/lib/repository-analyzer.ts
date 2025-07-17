@@ -3,7 +3,7 @@
 
 import { readdir, readFile, stat } from 'fs/promises'
 import { join, extname } from 'path'
-import { exec } from 'child_process'
+import { exec, ExecOptions } from 'child_process'
 import { promisify } from 'util'
 
 const execAsync = promisify(exec)
@@ -40,13 +40,21 @@ export class RepositoryAnalyzer {
   }
 
   async analyzeFromGitHub(githubUrl: string): Promise<RepositoryAnalysis> {
+    let cloneDir: string | null = null
+    
     try {
-      // Use GitHub API instead of cloning for security
-      const analysis = await this.analyzeFromGitHubAPI(githubUrl)
+      // Clone repository locally to avoid rate limits
+      cloneDir = await this.cloneRepository(githubUrl)
+      const analysis = await this.analyzeDirectory(cloneDir)
       return analysis
     } catch (error) {
       console.error('Error analyzing GitHub repository:', error)
       throw error
+    } finally {
+      // Always cleanup the cloned directory
+      if (cloneDir) {
+        await this.cleanup(cloneDir)
+      }
     }
   }
 
@@ -102,19 +110,27 @@ export class RepositoryAnalyzer {
 
   private async cloneRepository(githubUrl: string): Promise<string> {
     const timestamp = Date.now()
-    const cloneDir = join(this.tempDir, `repo-${timestamp}`)
+    const randomSuffix = Math.random().toString(36).substring(7)
+    const cloneDir = join(this.tempDir, `repo-${timestamp}-${randomSuffix}`)
     
     try {
       // Ensure temp directory exists
       await execAsync(`mkdir -p ${this.tempDir}`)
       
-      // Clone the repository
-      await execAsync(`git clone ${githubUrl} ${cloneDir}`)
+      // Clone the repository with timeout and depth limit for faster cloning
+      await execAsync(`timeout 300 git clone --depth 1 --single-branch "${githubUrl}" "${cloneDir}"`, {
+        timeout: 300000 // 5 minutes timeout
+      } as ExecOptions)
       
+      console.log(`Repository cloned to: ${cloneDir}`)
       return cloneDir
     } catch (error) {
       console.error('Error cloning repository:', error)
-      throw new Error(`Failed to clone repository: ${githubUrl}`)
+      // Cleanup on failure
+      if (cloneDir) {
+        await this.cleanup(cloneDir)
+      }
+      throw new Error(`Failed to clone repository: ${githubUrl}. Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -377,9 +393,17 @@ export class RepositoryAnalyzer {
 
   private async cleanup(directory: string): Promise<void> {
     try {
-      await execAsync(`rm -rf ${directory}`)
+      console.log(`Cleaning up temporary directory: ${directory}`)
+      await execAsync(`rm -rf "${directory}"`)
+      console.log(`Successfully cleaned up: ${directory}`)
     } catch (error) {
       console.error('Error cleaning up temporary directory:', error)
+      // Try with sudo if regular cleanup fails (shouldn't be needed in Docker)
+      try {
+        await execAsync(`sudo rm -rf "${directory}"`)
+      } catch (sudoError) {
+        console.error('Sudo cleanup also failed:', sudoError)
+      }
     }
   }
 

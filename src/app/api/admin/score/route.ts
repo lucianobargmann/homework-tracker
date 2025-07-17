@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { userId, githubUrl, promptsText } = body
+    const { userId, githubUrl, promptsText, allowRescore = false } = body
 
     if (!userId || !githubUrl) {
       return NextResponse.json({ 
@@ -46,25 +46,57 @@ export async function POST(request: NextRequest) {
     // Initialize scoring engine
     const scoringEngine = new ScoringEngine()
 
+    // Check if scoring already exists
+    const existingScore = await prisma.scoringResult.findFirst({
+      where: {
+        user_id: userId,
+        github_url: githubUrl
+      }
+    })
+
+    if (existingScore && !allowRescore) {
+      return NextResponse.json({
+        error: 'Repository already scored. Use allowRescore=true to rescore.',
+        existingScore: {
+          id: existingScore.id,
+          totalScore: existingScore.total_score,
+          maxScore: existingScore.max_score,
+          percentage: existingScore.percentage,
+          createdAt: existingScore.created_at
+        }
+      }, { status: 409 })
+    }
+
     // Run the scoring
     const scoringReport = await scoringEngine.scoreRepository(
       githubUrl, 
       promptsText || user.prompts_used || undefined
     )
 
-    // Save the scoring results
-    const scoringResult = await prisma.scoringResult.create({
-      data: {
-        user_id: userId,
-        github_url: githubUrl,
-        total_score: scoringReport.totalScore,
-        max_score: scoringReport.maxScore,
-        percentage: scoringReport.percentage,
-        report_data: JSON.stringify(scoringReport),
-        created_at: new Date(),
-        updated_at: new Date()
-      }
-    })
+    // Save or update the scoring results
+    const scoringResult = existingScore && allowRescore 
+      ? await prisma.scoringResult.update({
+          where: { id: existingScore.id },
+          data: {
+            total_score: scoringReport.totalScore,
+            max_score: scoringReport.maxScore,
+            percentage: scoringReport.percentage,
+            report_data: JSON.stringify(scoringReport),
+            updated_at: new Date()
+          }
+        })
+      : await prisma.scoringResult.create({
+          data: {
+            user_id: userId,
+            github_url: githubUrl,
+            total_score: scoringReport.totalScore,
+            max_score: scoringReport.maxScore,
+            percentage: scoringReport.percentage,
+            report_data: JSON.stringify(scoringReport),
+            created_at: new Date(),
+            updated_at: new Date()
+          }
+        })
 
     return NextResponse.json({
       success: true,
