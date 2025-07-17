@@ -43,16 +43,25 @@ export class RepositoryAnalyzer {
     let cloneDir: string | null = null
     
     try {
+      console.log(`🔍 Starting analysis of GitHub repository: ${githubUrl}`)
+      
       // Clone repository locally to avoid rate limits
+      console.log(`📥 Cloning repository locally...`)
       cloneDir = await this.cloneRepository(githubUrl)
+      console.log(`✅ Repository cloned successfully to: ${cloneDir}`)
+      
+      console.log(`🔬 Analyzing repository structure...`)
       const analysis = await this.analyzeDirectory(cloneDir)
+      console.log(`✅ Repository analysis completed. Found ${analysis.files.length} files.`)
+      
       return analysis
     } catch (error) {
-      console.error('Error analyzing GitHub repository:', error)
+      console.error('❌ Error analyzing GitHub repository:', error)
       throw error
     } finally {
       // Always cleanup the cloned directory
       if (cloneDir) {
+        console.log(`🧹 Cleaning up temporary directory: ${cloneDir}`)
         await this.cleanup(cloneDir)
       }
     }
@@ -114,18 +123,24 @@ export class RepositoryAnalyzer {
     const cloneDir = join(this.tempDir, `repo-${timestamp}-${randomSuffix}`)
     
     try {
+      console.log(`📁 Creating temp directory: ${this.tempDir}`)
       // Ensure temp directory exists
       await execAsync(`mkdir -p ${this.tempDir}`)
       
+      console.log(`🔗 Starting git clone: ${githubUrl}`)
+      console.log(`📍 Target directory: ${cloneDir}`)
+      
       // Clone the repository with timeout and depth limit for faster cloning
+      const startTime = Date.now()
       await execAsync(`timeout 300 git clone --depth 1 --single-branch "${githubUrl}" "${cloneDir}"`, {
         timeout: 300000 // 5 minutes timeout
       } as ExecOptions)
       
-      console.log(`Repository cloned to: ${cloneDir}`)
+      const cloneTime = Date.now() - startTime
+      console.log(`✅ Repository cloned successfully in ${cloneTime}ms to: ${cloneDir}`)
       return cloneDir
     } catch (error) {
-      console.error('Error cloning repository:', error)
+      console.error(`❌ Error cloning repository ${githubUrl}:`, error)
       // Cleanup on failure
       if (cloneDir) {
         await this.cleanup(cloneDir)

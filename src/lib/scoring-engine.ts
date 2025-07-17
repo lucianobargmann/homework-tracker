@@ -3,7 +3,6 @@
 
 import { ScoringEvaluators } from './scoring-evaluators'
 import { RepositoryAnalyzer } from './repository-analyzer'
-import { GitHubClient } from './github-client'
 
 export interface ScoringReport {
   totalScore: number
@@ -33,32 +32,48 @@ export interface SubcategoryScore {
 export class ScoringEngine {
   private evaluators: ScoringEvaluators
   private analyzer: RepositoryAnalyzer
-  private githubClient: GitHubClient
 
   constructor() {
     this.evaluators = new ScoringEvaluators()
     this.analyzer = new RepositoryAnalyzer()
-    this.githubClient = new GitHubClient()
   }
 
   async scoreRepository(githubUrl: string, promptsText?: string): Promise<ScoringReport> {
     try {
+      console.log(`🏆 Starting scoring process for: ${githubUrl}`)
+      const startTime = Date.now()
+      
       // Step 1: Download and analyze repository
+      console.log(`📖 Step 1: Analyzing repository structure...`)
       const repoAnalysis = await this.analyzer.analyzeFromGitHub(githubUrl)
+      console.log(`✅ Repository analysis completed. Languages: ${repoAnalysis.codeAnalysis.languages.join(', ')}`)
+      console.log(`🔧 Frameworks detected: ${repoAnalysis.codeAnalysis.frameworks.join(', ')}`)
       
       // Step 2: Use provided prompts or extract from repo
       const prompts = promptsText || repoAnalysis.promptsFile
+      console.log(`📝 Step 2: Prompts ${prompts ? 'found' : 'not found'} - Length: ${prompts?.length || 0} characters`)
       
       // Step 3: Evaluate all categories
+      console.log(`🖼️ Step 3: Evaluating scoring categories...`)
       const categories = await this.evaluateAllCategories(repoAnalysis, prompts)
       
       // Step 4: Calculate totals
+      console.log(`🧮 Step 4: Calculating final scores...`)
       const totalScore = categories.reduce((sum, cat) => sum + cat.score, 0)
       const maxScore = categories.reduce((sum, cat) => sum + cat.maxScore, 0)
       const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0
       
+      console.log(`📊 Scoring summary:`)
+      categories.forEach(cat => {
+        console.log(`   - ${cat.category}: ${cat.score}/${cat.maxScore} (${cat.percentage.toFixed(1)}%)`)
+      })
+      
       // Step 5: Generate recommendations
+      console.log(`💡 Step 5: Generating recommendations...`)
       const recommendations = this.generateRecommendations(categories)
+      
+      const totalTime = Date.now() - startTime
+      console.log(`✅ Scoring completed in ${totalTime}ms. Final score: ${totalScore}/${maxScore} (${percentage.toFixed(1)}%)`)
       
       return {
         totalScore,
@@ -69,7 +84,7 @@ export class ScoringEngine {
         timestamp: new Date().toISOString()
       }
     } catch (error) {
-      console.error('Error scoring repository:', error)
+      console.error('❌ Error scoring repository:', error)
       throw error
     }
   }

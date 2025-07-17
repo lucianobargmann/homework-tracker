@@ -46,6 +46,10 @@ export async function POST(request: NextRequest) {
     // Initialize scoring engine
     const scoringEngine = new ScoringEngine()
 
+    console.log(`🏆 Starting scoring process for user: ${user.email} (${userId})`)
+    console.log(`🔗 Repository URL: ${githubUrl}`)
+    console.log(`🔄 Allow rescore: ${allowRescore}`)
+    
     // Check if scoring already exists
     const existingScore = await prisma.scoringResult.findFirst({
       where: {
@@ -55,6 +59,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (existingScore && !allowRescore) {
+      console.log(`⚠️ Repository already scored, blocking rescore`)
       return NextResponse.json({
         error: 'Repository already scored. Use allowRescore=true to rescore.',
         existingScore: {
@@ -67,13 +72,20 @@ export async function POST(request: NextRequest) {
       }, { status: 409 })
     }
 
+    if (existingScore && allowRescore) {
+      console.log(`🔄 Rescoring existing submission (ID: ${existingScore.id})`)
+    }
+
     // Run the scoring
+    console.log(`🚀 Initiating scoring engine...`)
     const scoringReport = await scoringEngine.scoreRepository(
       githubUrl, 
       promptsText || user.prompts_used || undefined
     )
+    console.log(`✅ Scoring engine completed successfully`)
 
     // Save or update the scoring results
+    console.log(`💾 Saving scoring results to database...`)
     const scoringResult = existingScore && allowRescore 
       ? await prisma.scoringResult.update({
           where: { id: existingScore.id },
@@ -97,6 +109,9 @@ export async function POST(request: NextRequest) {
             updated_at: new Date()
           }
         })
+    
+    console.log(`✅ Scoring results saved successfully (ID: ${scoringResult.id})`)
+    console.log(`🏆 Final score: ${scoringReport.totalScore}/${scoringReport.maxScore} (${scoringReport.percentage.toFixed(1)}%)`)
 
     return NextResponse.json({
       success: true,
@@ -112,7 +127,13 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error scoring submission:', error)
+    console.error('❌ Error scoring submission:', error)
+    console.error('❌ Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      userId,
+      githubUrl
+    })
     return NextResponse.json({ 
       error: 'Internal server error',
       message: error instanceof Error ? error.message : 'Unknown error'

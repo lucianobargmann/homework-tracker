@@ -66,7 +66,8 @@ export default function AdminDashboard() {
         body: JSON.stringify({
           userId,
           githubUrl,
-          promptsText
+          promptsText,
+          allowRescore: true  // Always allow rescoring to overwrite existing scores
         })
       })
 
