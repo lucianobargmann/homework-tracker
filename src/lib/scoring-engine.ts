@@ -105,7 +105,7 @@ export class ScoringEngine {
     // 2. AI Tool Orchestration (55 points)
     categories.push({
       category: 'AI Tool Orchestration',
-      ...this.evaluateAIOrchestration(analysis),
+      ...this.evaluateAIOrchestration(analysis, prompts),
       maxScore: 55
     })
 
@@ -116,16 +116,16 @@ export class ScoringEngine {
       maxScore: 110
     })
 
-    // 4. End-to-End Functionality (25 points)
+    // 4. Code Quality & Best Practices (25 points)
     categories.push({
-      category: 'End-to-End Functionality',
+      category: 'Code Quality & Best Practices',
       ...this.evaluateEndToEnd(analysis),
       maxScore: 25
     })
 
-    // 5. Reasoning Trace (25 points)
+    // 5. Reasoning & Decision Making (25 points)
     categories.push({
-      category: 'Reasoning Trace',
+      category: 'Reasoning & Decision Making',
       ...this.evaluateReasoningTrace(analysis),
       maxScore: 25
     })
@@ -141,54 +141,44 @@ export class ScoringEngine {
   private evaluatePromptQuality(prompts: string | null): Omit<CategoryScore, 'category' | 'maxScore'> {
     const subcategories: SubcategoryScore[] = []
 
-    // Structure (25 points)
+    // 1.1 Prompt Structure & Organization (25 points)
     const structure = this.evaluators.evaluatePromptStructure(prompts)
     subcategories.push({
-      name: 'Structure & Organization',
+      name: 'Prompt Structure & Organization',
       score: structure.score,
       maxScore: 25,
       feedback: structure.feedback,
       evidence: structure.evidence
     })
 
-    // Layered Prompting (20 points)
-    const layered = this.evaluators.evaluateLayeredPrompting(prompts)
-    subcategories.push({
-      name: 'Layered Prompting',
-      score: layered.score,
-      maxScore: 20,
-      feedback: layered.feedback,
-      evidence: layered.evidence
-    })
-
-    // Context Management (15 points)
-    const context = this.evaluators.evaluateContextManagement(prompts)
-    subcategories.push({
-      name: 'Context Management',
-      score: context.score,
-      maxScore: 15,
-      feedback: context.feedback,
-      evidence: context.evidence
-    })
-
-    // Iterative Refinement (15 points)
-    const refinement = this.evaluators.evaluateIterativeRefinement(prompts)
-    subcategories.push({
-      name: 'Iterative Refinement',
-      score: refinement.score,
-      maxScore: 15,
-      feedback: refinement.feedback,
-      evidence: refinement.evidence
-    })
-
-    // Technical Specificity (25 points)
+    // 1.2 Technical Specification (25 points)
     const specificity = this.evaluators.evaluateTechnicalSpecificity(prompts)
     subcategories.push({
-      name: 'Technical Specificity',
+      name: 'Technical Specification',
       score: specificity.score,
       maxScore: 25,
       feedback: specificity.feedback,
       evidence: specificity.evidence
+    })
+
+    // 1.3 Feature Coverage (25 points)
+    const coverage = this.evaluators.evaluateFeatureCoverage(prompts)
+    subcategories.push({
+      name: 'Feature Coverage',
+      score: coverage.score,
+      maxScore: 25,
+      feedback: coverage.feedback,
+      evidence: coverage.evidence
+    })
+
+    // 1.4 Problem-Solving Approach (25 points)
+    const refinement = this.evaluators.evaluateIterativeRefinement(prompts)
+    subcategories.push({
+      name: 'Problem-Solving Approach',
+      score: refinement.score,
+      maxScore: 25,
+      feedback: refinement.feedback,
+      evidence: refinement.evidence
     })
 
     const totalScore = subcategories.reduce((sum, sub) => sum + sub.score, 0)
@@ -199,23 +189,23 @@ export class ScoringEngine {
     }
   }
 
-  private evaluateAIOrchestration(analysis: any): Omit<CategoryScore, 'category' | 'maxScore'> {
+  private evaluateAIOrchestration(analysis: any, prompts: string | null): Omit<CategoryScore, 'category' | 'maxScore'> {
     const subcategories: SubcategoryScore[] = []
 
-    // Tool Diversity (30 points)
-    const diversity = this.evaluators.evaluateToolDiversity(analysis)
+    // 2.1 Effective AI Usage (30 points)
+    const aiUsage = this.evaluators.evaluateAIOrchestration(analysis)
     subcategories.push({
-      name: 'Tool Diversity',
-      score: diversity.score,
+      name: 'Effective AI Usage',
+      score: aiUsage.score,
       maxScore: 30,
-      feedback: diversity.feedback,
-      evidence: diversity.evidence
+      feedback: aiUsage.feedback,
+      evidence: aiUsage.evidence
     })
 
-    // Workflow Integration (25 points)
+    // 2.2 Code Generation Strategy (25 points)
     const workflow = this.evaluators.evaluateWorkflowIntegration(analysis)
     subcategories.push({
-      name: 'Workflow Integration',
+      name: 'Code Generation Strategy',
       score: workflow.score,
       maxScore: 25,
       feedback: workflow.feedback,
@@ -253,17 +243,7 @@ export class ScoringEngine {
       evidence: backend.evidence
     })
 
-    // Frontend (25 points)
-    const frontend = this.evaluators.evaluateFrontend(analysis)
-    subcategories.push({
-      name: 'Frontend Implementation',
-      score: frontend.score,
-      maxScore: 25,
-      feedback: frontend.feedback,
-      evidence: frontend.evidence
-    })
-
-    // Mobile (25 points)
+    // 3.3 Mobile Implementation (25 points)
     const mobile = this.evaluators.evaluateMobile(analysis)
     subcategories.push({
       name: 'Mobile Implementation',
@@ -271,6 +251,16 @@ export class ScoringEngine {
       maxScore: 25,
       feedback: mobile.feedback,
       evidence: mobile.evidence
+    })
+
+    // 3.4 Integration Quality (25 points)
+    const integration = this.evaluators.evaluateFrontend(analysis)
+    subcategories.push({
+      name: 'Integration Quality',
+      score: integration.score,
+      maxScore: 25,
+      feedback: integration.feedback,
+      evidence: integration.evidence
     })
 
     const totalScore = subcategories.reduce((sum, sub) => sum + sub.score, 0)

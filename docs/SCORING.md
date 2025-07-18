@@ -1,646 +1,243 @@
-Based on this project and the assignment the candidates must deliver (public/assignment.pdf)
-I want an automatic grader that connects to the submitted github, checks the code and evaluates the prompts submitted..
-
-Areas I want to score:
-* Prompt quality
-* AI tool orchestration
-* Backend, database, and frontend integration
-* End-to-end functionality on web + mobile
-* Reasoning trace (prompts, readme, decisions)
-
-The intent is to select people that can drive AI code gen tools to create Production quality systems.
-
-This is same sample code:
-// Comprehensive Evaluation Methods for AI Challenge Scoring
-// File: /src/lib/scoring-evaluators.ts
-
-import { readFileSync, existsSync } from 'fs'
-import { join } from 'path'
-import { spawn } from 'child_process'
-
-interface EvaluationResult {
-  score: number
-  feedback: string
-  evidence: string[]
-}
-
-interface RepositoryAnalysis {
-  directory: string
-  files: FileInfo[]
-  promptsFile: string | null
-  readmeFile: string | null
-  packageJson: any
-  codeAnalysis: CodeAnalysis
-}
-
-interface FileInfo {
-  path: string
-  type: 'file' | 'directory'
-  size: number
-  extension?: string
-}
-
-interface CodeAnalysis {
-  languages: string[]
-  frameworks: string[]
-  hasTests: boolean
-  hasDocumentation: boolean
-  codeQuality: number
-}
-
-export class ScoringEvaluators {
-  
-  // ========== PROMPT QUALITY EVALUATION ==========
-  
-  evaluatePromptStructure(promptsFile: string | null): EvaluationResult {
-    if (!promptsFile) {
-      return {
-        score: 0,
-        feedback: "No prompts file found - missing critical documentation",
-        evidence: []
-      }
-    }
-
-    const lines = promptsFile.split('\n').filter(line => line.trim())
-    let score = 0
-    const evidence: string[] = []
-
-    // Check for clear organization (5 points)
-    const hasHeaders = lines.some(line => line.match(/^#+\s/))
-    const hasNumbering = lines.some(line => line.match(/^\d+\./))
-    const hasTimestamps = lines.some(line => line.match(/\d{1,2}:\d{2}/))
-    
-    if (hasHeaders || hasNumbering || hasTimestamps) {
-      score += 5
-      evidence.push("Prompts are well-organized with clear structure")
-    }
-
-    // Check for prompt clarity (10 points)
-    const clearPrompts = lines.filter(line => {
-      const lower = line.toLowerCase()
-      return lower.includes('create') || lower.includes('implement') || 
-             lower.includes('build') || lower.includes('generate') ||
-             lower.includes('design') || lower.includes('develop')
-    }).length
-
-    if (clearPrompts >= 5) {
-      score += 10
-      evidence.push(`Found ${clearPrompts} clear, actionable prompts`)
-    } else if (clearPrompts >= 3) {
-      score += 7
-      evidence.push(`Found ${clearPrompts} actionable prompts`)
-    } else if (clearPrompts >= 1) {
-      score += 3
-      evidence.push(`Found ${clearPrompts} actionable prompts`)
-    }
-
-    // Check for context and requirements (10 points)
-    const contextLines = lines.filter(line => {
-      const lower = line.toLowerCase()
-      return lower.includes('context') || lower.includes('requirement') ||
-             lower.includes('feature') || lower.includes('user') ||
-             lower.includes('voting') || lower.includes('database')
-    }).length
-
-    if (contextLines >= 3) {
-      score += 10
-      evidence.push(`Good context setting with ${contextLines} relevant lines`)
-    } else if (contextLines >= 1) {
-      score += 5
-      evidence.push(`Some context provided with ${contextLines} relevant lines`)
-    }
-
-    const feedback = score >= 20 ? "Excellent prompt structure and clarity" :
-                    score >= 15 ? "Good prompt structure with room for improvement" :
-                    score >= 10 ? "Basic prompt structure, needs more clarity" :
-                    "Poor prompt structure, lacks organization and clarity"
-
-    return {
-      score: Math.min(score, 25),
-      feedback,
-      evidence
-    }
-  }
-
-  evaluateLayeredPrompting(promptsFile: string | null): EvaluationResult {
-    if (!promptsFile) {
-      return {
-        score: 0,
-        feedback: "No prompts file to evaluate layered approach",
-        evidence: []
-      }
-    }
-
-    const lines = promptsFile.split('\n').filter(line => line.trim())
-    let score = 0
-    const evidence: string[] = []
-
-    // Check for progressive complexity (8 points)
-    const hasProgression = this.checkPromptProgression(lines)
-    if (hasProgression) {
-      score += 8
-      evidence.push("Shows progressive complexity in prompts")
-    }
-
-    // Check for follow-up prompts (7 points)
-    const followUps = lines.filter(line => {
-      const lower = line.toLowerCase()
-      return lower.includes('follow up') || lower.includes('also') ||
-             lower.includes('now') || lower.includes('next') ||
-             lower.includes('then') || lower.includes('after')
-    }).length
-
-    if (followUps >= 3) {
-      score += 7
-      evidence.push(`Found ${followUps} follow-up prompts showing iteration`)
-    } else if (followUps >= 1) {
-      score += 4
-      evidence.push(`Found ${followUps} follow-up prompts`)
-    }
-
-    // Check for refinement prompts (5 points)
-    const refinements = lines.filter(line => {
-      const lower = line.toLowerCase()
-      return lower.includes('improve') || lower.includes('fix') ||
-             lower.includes('enhance') || lower.includes('optimize') ||
-             lower.includes('better') || lower.includes('refactor')
-    }).length
-
-    if (refinements >= 2) {
-      score += 5
-      evidence.push(`Found ${refinements} refinement prompts`)
-    } else if (refinements >= 1) {
-      score += 3
-      evidence.push(`Found ${refinements} refinement prompts`)
-    }
-
-    const feedback = score >= 15 ? "Excellent layered prompting approach" :
-                    score >= 10 ? "Good use of layered prompting" :
-                    score >= 5 ? "Basic layered approach" :
-                    "Lacks layered prompting strategy"
-
-    return {
-      score: Math.min(score, 20),
-      feedback,
-      evidence
-    }
-  }
-
-  evaluateContextManagement(promptsFile: string | null): EvaluationResult {
-    if (!promptsFile) {
-      return {
-        score: 0,
-        feedback: "No prompts file to evaluate context management",
-        evidence: []
-      }
-    }
-
-    let score = 0
-    const evidence: string[] = []
-
-    // Check for context preservation (8 points)
-    const hasContext = promptsFile.toLowerCase().includes('context') ||
-                      promptsFile.toLowerCase().includes('remember') ||
-                      promptsFile.toLowerCase().includes('previous')
-    
-    if (hasContext) {
-      score += 8
-      evidence.push("Shows awareness of context preservation")
-    }
-
-    // Check for requirement references (7 points)
-    const requirements = ['database', 'api', 'frontend', 'mobile', 'voting', 'feature']
-    const mentionedReqs = requirements.filter(req => 
-      promptsFile.toLowerCase().includes(req)
-    ).length
-
-    if (mentionedReqs >= 4) {
-      score += 7
-      evidence.push(`References ${mentionedReqs} key requirements`)
-    } else if (mentionedReqs >= 2) {
-      score += 4
-      evidence.push(`References ${mentionedReqs} key requirements`)
-    }
-
-    const feedback = score >= 12 ? "Excellent context management" :
-                    score >= 8 ? "Good context management" :
-                    score >= 4 ? "Basic context management" :
-                    "Poor context management"
-
-    return {
-      score: Math.min(score, 15),
-      feedback,
-      evidence
-    }
-  }
-
-  evaluateIterativeRefinement(promptsFile: string | null): EvaluationResult {
-    if (!promptsFile) {
-      return {
-        score: 0,
-        feedback: "No prompts file to evaluate iterative refinement",
-        evidence: []
-      }
-    }
-
-    let score = 0
-    const evidence: string[] = []
-
-    // Check for error handling prompts (5 points)
-    const errorHandling = promptsFile.toLowerCase().includes('error') ||
-                         promptsFile.toLowerCase().includes('fix') ||
-                         promptsFile.toLowerCase().includes('debug')
-    
-    if (errorHandling) {
-      score += 5
-      evidence.push("Shows error handling and debugging approach")
-    }
-
-    // Check for testing prompts (5 points)
-    const testing = promptsFile.toLowerCase().includes('test') ||
-                   promptsFile.toLowerCase().includes('validate') ||
-                   promptsFile.toLowerCase().includes('verify')
-    
-    if (testing) {
-      score += 5
-      evidence.push("Includes testing and validation prompts")
-    }
-
-    // Check for improvement prompts (5 points)
-    const improvements = ['improve', 'optimize', 'enhance', 'better', 'refactor']
-    const hasImprovements = improvements.some(word => 
-      promptsFile.toLowerCase().includes(word)
-    )
-    
-    if (hasImprovements) {
-      score += 5
-      evidence.push("Shows iterative improvement approach")
-    }
-
-    const feedback = score >= 12 ? "Excellent iterative refinement" :
-                    score >= 8 ? "Good iterative approach" :
-                    score >= 4 ? "Basic iterative approach" :
-                    "Lacks iterative refinement"
-
-    return {
-      score: Math.min(score, 15),
-      feedback,
-      evidence
-    }
-  }
-
-  evaluateTechnicalSpecificity(promptsFile: string | null): EvaluationResult {
-    if (!promptsFile) {
-      return {
-        score: 0,
-        feedback: "No prompts file to evaluate technical specificity",
-        evidence: []
-      }
-    }
-
-    let score = 0
-    const evidence: string[] = []
-
-    // Check for specific technologies (10 points)
-    const technologies = ['react', 'node', 'express', 'sqlite', 'postgresql', 
-                         'mongodb', 'prisma', 'next.js', 'vue', 'angular',
-                         'swift', 'kotlin', 'flutter', 'react native']
-    
-    const mentionedTech = technologies.filter(tech => 
-      promptsFile.toLowerCase().includes(tech)
-    ).length
-
-    if (mentionedTech >= 4) {
-      score += 10
-      evidence.push(`Mentions ${mentionedTech} specific technologies`)
-    } else if (mentionedTech >= 2) {
-      score += 7
-      evidence.push(`Mentions ${mentionedTech} specific technologies`)
-    } else if (mentionedTech >= 1) {
-      score += 4
-      evidence.push(`Mentions ${mentionedTech} specific technologies`)
-    }
-
-    // Check for API specifications (8 points)
-    const apiTerms = ['api', 'endpoint', 'route', 'post', 'get', 'json', 'rest']
-    const mentionedAPI = apiTerms.filter(term => 
-      promptsFile.toLowerCase().includes(term)
-    ).length
-
-    if (mentionedAPI >= 4) {
-      score += 8
-      evidence.push(`Specific about API design with ${mentionedAPI} terms`)
-    } else if (mentionedAPI >= 2) {
-      score += 5
-      evidence.push(`Some API specificity with ${mentionedAPI} terms`)
-    }
-
-    // Check for database specificity (7 points)
-    const dbTerms = ['database', 'table', 'schema', 'query', 'model', 'migration']
-    const mentionedDB = dbTerms.filter(term => 
-      promptsFile.toLowerCase().includes(term)
-    ).length
-
-    if (mentionedDB >= 3) {
-      score += 7
-      evidence.push(`Specific about database design with ${mentionedDB} terms`)
-    } else if (mentionedDB >= 1) {
-      score += 4
-      evidence.push(`Some database specificity with ${mentionedDB} terms`)
-    }
-
-    const feedback = score >= 20 ? "Excellent technical specificity" :
-                    score >= 15 ? "Good technical specificity" :
-                    score >= 10 ? "Basic technical specificity" :
-                    "Lacks technical specificity"
-
-    return {
-      score: Math.min(score, 25),
-      feedback,
-      evidence
-    }
-  }
-
-  // ========== AI ORCHESTRATION EVALUATION ==========
-
-  evaluateToolDiversity(analysis: RepositoryAnalysis): EvaluationResult {
-    let score = 0
-    const evidence: string[] = []
-
-    // Check for multiple languages (10 points)
-    const languages = analysis.codeAnalysis.languages
-    if (languages.length >= 3) {
-      score += 10
-      evidence.push(`Uses ${languages.length} programming languages: ${languages.join(', ')}`)
-    } else if (languages.length >= 2) {
-      score += 7
-      evidence.push(`Uses ${languages.length} programming languages: ${languages.join(', ')}`)
-    } else if (languages.length >= 1) {
-      score += 4
-      evidence.push(`Uses ${languages.length} programming language: ${languages.join(', ')}`)
-    }
-
-    // Check for framework diversity (10 points)
-    const frameworks = analysis.codeAnalysis.frameworks
-    if (frameworks.length >= 3) {
-      score += 10
-      evidence.push(`Uses ${frameworks.length} frameworks: ${frameworks.join(', ')}`)
-    } else if (frameworks.length >= 2) {
-      score += 7
-      evidence.push(`Uses ${frameworks.length} frameworks: ${frameworks.join(', ')}`)
-    } else if (frameworks.length >= 1) {
-      score += 4
-      evidence.push(`Uses ${frameworks.length} framework: ${frameworks.join(', ')}`)
-    }
-
-    // Check for AI tool mentions in prompts (10 points)
-    if (analysis.promptsFile) {
-      const aiTools = ['claude', 'gpt', 'copilot', 'chatgpt', 'gemini', 'openai']
-      const mentionedTools = aiTools.filter(tool => 
-        analysis.promptsFile!.toLowerCase().includes(tool)
-      ).length
-
-      if (mentionedTools >= 2) {
-        score += 10
-        evidence.push(`Mentions ${mentionedTools} AI tools in prompts`)
-      } else if (mentionedTools >= 1) {
-        score += 6
-        evidence.push(`Mentions ${mentionedTools} AI tool in prompts`)
-      }
-    }
-
-    const feedback = score >= 25 ? "Excellent tool diversity" :
-                    score >= 20 ? "Good tool diversity" :
-                    score >= 15 ? "Moderate tool diversity" :
-                    "Limited tool diversity"
-
-    return {
-      score: Math.min(score, 30),
-      feedback,
-      evidence
-    }
-  }
-
-  evaluateWorkflowIntegration(analysis: RepositoryAnalysis): EvaluationResult {
-    let score = 0
-    const evidence: string[] = []
-
-    // Check for proper project structure (10 points)
-    const hasStructure = this.checkProjectStructure(analysis.files)
-    if (hasStructure.score >= 8) {
-      score += 10
-      evidence.push("Excellent project structure")
-    } else if (hasStructure.score >= 5) {
-      score += 7
-      evidence.push("Good project structure")
-    } else if (hasStructure.score >= 3) {
-      score += 4
-      evidence.push("Basic project structure")
-    }
-
-    // Check for configuration files (8 points)
-    const configFiles = analysis.files.filter(file => 
-      file.path.includes('package.json') ||
-      file.path.includes('tsconfig.json') ||
-      file.path.includes('vite.config') ||
-      file.path.includes('next.config') ||
-      file.path.includes('webpack.config')
-    ).length
-
-    if (configFiles >= 3) {
-      score += 8
-      evidence.push(`Found ${configFiles} configuration files`)
-    } else if (configFiles >= 2) {
-      score += 5
-      evidence.push(`Found ${configFiles} configuration files`)
-    } else if (configFiles >= 1) {
-      score += 3
-      evidence.push(`Found ${configFiles} configuration file`)
-    }
-
-    // Check for development workflow (7 points)
-    const hasWorkflow = analysis.files.some(file => 
-      file.path.includes('docker') ||
-      file.path.includes('github') ||
-      file.path.includes('gitlab') ||
-      file.path.includes('makefile') ||
-      file.path.includes('scripts')
-    )
-
-    if (hasWorkflow) {
-      score += 7
-      evidence.push("Includes development workflow automation")
-    }
-
-    const feedback = score >= 20 ? "Excellent workflow integration" :
-                    score >= 15 ? "Good workflow integration" :
-                    score >= 10 ? "Basic workflow integration" :
-                    "Poor workflow integration"
-
-    return {
-      score: Math.min(score, 25),
-      feedback,
-      evidence
-    }
-  }
-
-  // ========== SYSTEM INTEGRATION EVALUATION ==========
-
-  evaluateDatabase(analysis: RepositoryAnalysis): EvaluationResult {
-    let score = 0
-    const evidence: string[] = []
-
-    // Check for database files (15 points)
-    const dbFiles = analysis.files.filter(file => 
-      file.path.includes('prisma') ||
-      file.path.includes('schema') ||
-      file.path.includes('migration') ||
-      file.path.includes('model') ||
-      file.path.includes('database') ||
-      file.path.includes('.db') ||
-      file.path.includes('sequelize') ||
-      file.path.includes('mongoose')
-    ).length
-
-    if (dbFiles >= 3) {
-      score += 15
-      evidence.push(`Found ${dbFiles} database-related files`)
-    } else if (dbFiles >= 2) {
-      score += 10
-      evidence.push(`Found ${dbFiles} database-related files`)
-    } else if (dbFiles >= 1) {
-      score += 6
-      evidence.push(`Found ${dbFiles} database-related file`)
-    }
-
-    // Check for models/schemas (10 points)
-    const hasModels = this.checkForModels(analysis.files)
-    if (hasModels.score >= 8) {
-      score += 10
-      evidence.push("Well-defined database models")
-    } else if (hasModels.score >= 5) {
-      score += 7
-      evidence.push("Basic database models")
-    } else if (hasModels.score >= 3) {
-      score += 4
-      evidence.push("Minimal database models")
-    }
-
-    // Check for database configuration (5 points)
-    const hasConfig = analysis.files.some(file => 
-      file.path.includes('database.js') ||
-      file.path.includes('db.js') ||
-      file.path.includes('connection') ||
-      file.path.includes('config')
-    )
-
-    if (hasConfig) {
-      score += 5
-      evidence.push("Includes database configuration")
-    }
-
-    const feedback = score >= 25 ? "Excellent database implementation" :
-                    score >= 20 ? "Good database implementation" :
-                    score >= 15 ? "Basic database implementation" :
-                    "Poor database implementation"
-
-    return {
-      score: Math.min(score, 30),
-      feedback,
-      evidence
-    }
-  }
-
-  evaluateBackendAPI(analysis: RepositoryAnalysis): EvaluationResult {
-    let score = 0
-    const evidence: string[] = []
-
-    // Check for API files (15 points)
-    const apiFiles = analysis.files.filter(file => 
-      file.path.includes('api') ||
-      file.path.includes('route') ||
-      file.path.includes('controller') ||
-      file.path.includes('handler') ||
-      file.path.includes('endpoint') ||
-      file.path.includes('server')
-    ).length
-
-    if (apiFiles >= 5) {
-      score += 15
-      evidence.push(`Found ${apiFiles} API-related files`)
-    } else if (apiFiles >= 3) {
-      score += 10
-      evidence.push(`Found ${apiFiles} API-related files`)
-    } else if (apiFiles >= 1) {
-      score += 6
-      evidence.push(`Found ${apiFiles} API-related file`)
-    }
-
-    // Check for RESTful patterns (10 points)
-    const hasRestful = this.checkRestfulPatterns(analysis.files)
-    if (hasRestful) {
-      score += 10
-      evidence.push("Follows RESTful API patterns")
-    }
-
-    // Check for middleware (5 points)
-    const hasMiddleware = analysis.files.some(file => 
-      file.path.includes('middleware') ||
-      file.path.includes('auth') ||
-      file.path.includes('cors') ||
-      file.path.includes('validation')
-    )
-
-    if (hasMiddleware) {
-      score += 5
-      evidence.push("Includes middleware implementation")
-    }
-
-    const feedback = score >= 25 ? "Excellent API implementation" :
-                    score >= 20 ? "Good API implementation" :
-                    score >= 15 ? "Basic API implementation" :
-                    "Poor API implementation"
-
-    return {
-      score: Math.min(score, 30),
-      feedback,
-      evidence
-    }
-  }
-
-  evaluateFrontend(analysis: RepositoryAnalysis): EvaluationResult {
-    let score = 0
-    const evidence: string[] = []
-
-    // Check for frontend files (12 points)
-    const frontendFiles = analysis.files.filter(file => 
-      file.path.includes('component') ||
-      file.path.includes('page') ||
-      file.path.includes('view') ||
-      file.path.includes('ui') ||
-      file.path.includes('src') ||
-      file.extension === 'tsx' ||
-      file.extension === 'jsx' ||
-      file.extension === 'vue'
-    ).length
-
-    if (frontendFiles >= 10) {
-      score += 12
-      evidence.push(`Found ${frontendFiles} frontend files`)
-    } else if (frontendFiles >= 5) {
-      score += 8
-      evidence.push(`Found ${frontendFiles} frontend files`)
-    } else if (frontendFiles >= 3) {
-      score += 5
-      evidence.push(`Found ${frontendFiles} frontend files`)
-    }
-
-    // Check for component structure (8 points)
-    const hasComponents = this.checkComponentStructure(analysis.files)
-    if (hasComponents.score >= 6) {
-      score += 8
-      evidence.push("Well-structured components")
-    } else if (hasComponents.score >= 4) {
-      score += 5
-      evidence.push("Basic component structure")
-    }
+# AI Challenge Scoring System Documentation
+
+## Overview
+
+This document describes the automated scoring system for the AI Challenge, which evaluates candidates' ability to use AI code generation tools to create production-quality systems. The evaluation is based on the assignment in `public/assignment.pdf`.
+
+## Assignment Requirements
+
+The assignment requires candidates to build a **Voting Application** with the following components:
+
+### Required Features
+1. **Database** - Persistent storage for voting data
+2. **Backend API** - Server-side logic and data management
+3. **Mobile Native UI** - iOS or Android native application (NOT web frontend)
+
+### Core Functionality
+- Create and manage voting sessions
+- Cast votes with user authentication
+- Real-time vote counting and results
+- Prevent duplicate voting
+
+## Scoring Categories (Total: 315 points)
+
+### 1. Prompt Quality (100 points)
+
+#### 1.1 Prompt Structure & Organization (25 points)
+- **Evaluation**: Clear, well-organized prompts with logical flow
+- **Evidence Checked**:
+  - Use of headers, numbering, or clear sections
+  - Logical progression from setup to implementation
+  - Clear separation of different components (DB, API, Mobile)
+- **Scoring**:
+  - Excellent (20-25): Clear sections, numbered steps, logical flow
+  - Good (15-19): Some organization, mostly clear
+  - Fair (10-14): Basic structure present
+  - Poor (0-9): Disorganized, hard to follow
+
+#### 1.2 Technical Specification (25 points)
+- **Evaluation**: Specific technical requirements and implementation details
+- **Evidence Checked**:
+  - Mentions specific technologies (database type, API framework, mobile platform)
+  - Includes data models, API endpoints, UI components
+  - Specifies authentication, security, and error handling
+- **Scoring**:
+  - Excellent (20-25): Highly specific with clear technical details
+  - Good (15-19): Good technical specificity
+  - Fair (10-14): Some technical details
+  - Poor (0-9): Vague, lacks technical specifics
+
+#### 1.3 Feature Coverage (25 points)
+- **Evaluation**: How well prompts cover all required features
+- **Evidence Checked**:
+  - Voting session creation
+  - Vote casting mechanism
+  - Results display
+  - Duplicate prevention
+  - User authentication
+- **Scoring**:
+  - Excellent (20-25): All features thoroughly covered
+  - Good (15-19): Most features covered well
+  - Fair (10-14): Basic features covered
+  - Poor (0-9): Missing key features
+
+#### 1.4 Problem-Solving Approach (25 points)
+- **Evaluation**: Iterative refinement and error handling
+- **Evidence Checked**:
+  - Error handling prompts
+  - Testing and validation prompts
+  - Performance optimization
+  - Security considerations
+- **Scoring**:
+  - Excellent (20-25): Shows iterative problem-solving
+  - Good (15-19): Some refinement and error handling
+  - Fair (10-14): Basic problem-solving approach
+  - Poor (0-9): No evidence of iteration
+
+### 2. AI Tool Orchestration (55 points)
+
+#### 2.1 Effective AI Usage (30 points)
+- **Evaluation**: How well the candidate leverages AI capabilities
+- **Evidence Checked**:
+  - Progressive complexity in prompts (not all at once)
+  - Context preservation across prompts
+  - Appropriate prompt sizing (not too long, not too short)
+  - Clear instructions that AI can follow
+- **Scoring**:
+  - Excellent (25-30): Masterful AI orchestration
+  - Good (19-24): Effective AI usage
+  - Fair (13-18): Basic AI usage
+  - Poor (0-12): Ineffective AI usage
+
+#### 2.2 Code Generation Strategy (25 points)
+- **Evaluation**: Strategic approach to generating different components
+- **Evidence Checked**:
+  - Separate prompts for database, API, and mobile
+  - Building on previous outputs
+  - Requesting specific file structures
+  - Integration between components
+- **Scoring**:
+  - Excellent (20-25): Clear component-based strategy
+  - Good (15-19): Good separation of concerns
+  - Fair (10-14): Some strategic thinking
+  - Poor (0-9): No clear strategy
+
+### 3. System Integration (110 points)
+
+#### 3.1 Database Implementation (30 points)
+- **Evaluation**: Quality of database design and implementation
+- **Evidence Checked**:
+  - Schema/model definitions
+  - Proper relationships
+  - Migrations or setup scripts
+  - Connection configuration
+  - Data validation
+- **Scoring**:
+  - Excellent (25-30): Complete, well-designed database
+  - Good (19-24): Good database with minor issues
+  - Fair (13-18): Basic database functionality
+  - Poor (0-12): Incomplete or poor database
+
+#### 3.2 Backend API (30 points)
+- **Evaluation**: API design and implementation quality
+- **Evidence Checked**:
+  - RESTful or GraphQL endpoints
+  - Proper HTTP methods and status codes
+  - Request/response validation
+  - Error handling
+  - Authentication implementation
+- **Scoring**:
+  - Excellent (25-30): Production-ready API
+  - Good (19-24): Well-implemented API
+  - Fair (13-18): Functional API with issues
+  - Poor (0-12): Incomplete or poor API
+
+#### 3.3 Mobile Implementation (25 points)
+- **Evaluation**: Native mobile app quality
+- **Evidence Checked**:
+  - Native iOS (Swift/SwiftUI) or Android (Kotlin)
+  - NOT React Native, Flutter, or web views
+  - Proper UI components
+  - API integration
+  - State management
+- **Scoring**:
+  - Excellent (20-25): Native app with good UX
+  - Good (15-19): Functional native app
+  - Fair (10-14): Basic native app
+  - Poor (0-9): Non-native or incomplete
+
+#### 3.4 Integration Quality (25 points)
+- **Evaluation**: How well components work together
+- **Evidence Checked**:
+  - API calls from mobile app
+  - Data flow between layers
+  - Error handling across layers
+  - Consistent data models
+- **Scoring**:
+  - Excellent (20-25): Seamless integration
+  - Good (15-19): Good integration
+  - Fair (10-14): Basic integration
+  - Poor (0-9): Poor or no integration
+
+### 4. Code Quality & Best Practices (25 points)
+
+#### 4.1 Project Structure (10 points)
+- **Evidence Checked**:
+  - Logical file organization
+  - Separation of concerns
+  - Configuration management
+  - Environment handling
+
+#### 4.2 Code Quality (10 points)
+- **Evidence Checked**:
+  - Clean, readable code
+  - Consistent naming conventions
+  - Proper error handling
+  - No obvious security issues
+
+#### 4.3 Documentation (5 points)
+- **Evidence Checked**:
+  - README with setup instructions
+  - API documentation
+  - Code comments where needed
+
+### 5. Reasoning & Decision Making (25 points)
+
+#### 5.1 Technical Decisions (15 points)
+- **Evidence Checked**:
+  - Technology choices explained
+  - Trade-offs considered
+  - Architecture decisions documented
+
+#### 5.2 Problem Documentation (10 points)
+- **Evidence Checked**:
+  - Challenges encountered
+  - Solutions implemented
+  - Learning demonstrated
+
+## Automatic Scoring Implementation
+
+### Score Calculation
+```
+Total Score = Prompt Quality + AI Orchestration + System Integration + Code Quality + Reasoning
+Percentage = (Total Score / 315) * 100
+```
+
+### Grade Boundaries
+- **A (90-100%)**: 284-315 points - Production-ready system
+- **B (80-89%)**: 252-283 points - Strong implementation
+- **C (70-79%)**: 221-251 points - Acceptable implementation
+- **D (60-69%)**: 189-220 points - Basic implementation
+- **F (Below 60%)**: Below 189 points - Incomplete
+
+## Key Evaluation Principles
+
+1. **Objective Over Subjective**: Focus on measurable criteria (files present, features implemented) rather than subjective quality judgments.
+
+2. **Assignment Alignment**: Score based on actual requirements (mobile native UI, not web frontend).
+
+3. **Production Readiness**: Evaluate if the system could realistically be deployed and used.
+
+4. **AI Tool Mastery**: Assess how effectively the candidate uses AI to generate code, not just the final code quality.
+
+## Common Misconceptions to Avoid
+
+1. **"All projects have package.json"** - Not true for native mobile apps (iOS uses Xcode projects, Android uses Gradle)
+
+2. **"Frontend = Web"** - The assignment specifically requires mobile native UI, not web frontend
+
+3. **"More tools = better"** - Tool diversity should serve the requirements, not be arbitrary
+
+4. **"Deployment configuration"** - Looking for Docker files, CI/CD configs, or deployment scripts
+
+## Automated Testing Considerations
+
+Since we cannot run the code, we evaluate based on:
+- File structure and organization
+- Code completeness
+- API endpoint definitions
+- Database schema clarity
+- Mobile UI code presence
+- Integration points between components
+
+The scoring system uses static analysis to verify these elements exist and are properly implemented based on code inspection.

@@ -54,11 +54,13 @@ export default function AdminDashboard() {
   const [searchEmail, setSearchEmail] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [jobOpeningFilter, setJobOpeningFilter] = useState('all')
+  const [approvalStatusFilter, setApprovalStatusFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [sortField, setSortField] = useState<string>('created_at')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [approvingCandidates, setApprovingCandidates] = useState<Set<string>>(new Set())
   const [approvalTimers, setApprovalTimers] = useState<Map<string, NodeJS.Timeout>>(new Map())
+  const [recalculatingScores, setRecalculatingScores] = useState(false)
   const ITEMS_PER_PAGE = 10
 
   useEffect(() => {
@@ -156,6 +158,41 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error('Error updating candidate:', error)
       alert('Error updating candidate')
+    }
+  }
+
+  const recalculateAllScores = async () => {
+    if (!confirm('This will recalculate scores for all submitted candidates. This may take several minutes. Continue?')) {
+      return
+    }
+
+    setRecalculatingScores(true)
+    let successCount = 0
+    let errorCount = 0
+
+    try {
+      const submittedCandidates = candidates.filter(c => c.submitted_at && c.github_link)
+      
+      for (const candidate of submittedCandidates) {
+        try {
+          console.log(`Recalculating score for ${candidate.email}...`)
+          await scoreCandidate(candidate.id, candidate.github_link!, candidate.prompts_used)
+          successCount++
+        } catch (error) {
+          console.error(`Error recalculating score for ${candidate.email}:`, error)
+          errorCount++
+        }
+      }
+
+      alert(`Recalculation complete! Success: ${successCount}, Errors: ${errorCount}`)
+      
+      // Refresh candidates to get updated scores
+      fetchCandidates()
+    } catch (error) {
+      console.error('Error during bulk recalculation:', error)
+      alert('Error during bulk recalculation')
+    } finally {
+      setRecalculatingScores(false)
     }
   }
 
@@ -373,7 +410,6 @@ export default function AdminDashboard() {
       const data = await response.json()
 
       if (response.ok) {
-        alert(`${candidateEmail} has been rejected and notified via email.`)
         fetchCandidates() // Refresh to show updated status
       } else {
         alert(`Error rejecting candidate: ${data.error}`)
@@ -461,6 +497,11 @@ export default function AdminDashboard() {
       if (jobOpeningFilter === 'all') return true
       return candidate.job_opening?.id === jobOpeningFilter
     })
+    .filter(candidate => {
+      if (approvalStatusFilter === 'all') return true
+      if (approvalStatusFilter === 'pending') return !candidate.approval_status
+      return candidate.approval_status === approvalStatusFilter
+    })
     .sort((a, b) => {
       const aValue = getSortValue(a, sortField)
       const bValue = getSortValue(b, sortField)
@@ -480,7 +521,7 @@ export default function AdminDashboard() {
   // Reset to first page when filters or sorting change
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchEmail, showArchived, statusFilter, jobOpeningFilter, sortField, sortDirection])
+  }, [searchEmail, showArchived, statusFilter, jobOpeningFilter, approvalStatusFilter, sortField, sortDirection])
 
   // Calculate statistics
   const totalCandidates = candidates.length
@@ -688,6 +729,32 @@ export default function AdminDashboard() {
           </form>
         </div>
 
+        {/* Admin Actions */}
+        <div className="mb-8 bg-white p-6 rounded-lg shadow">
+          <h2 className="text-lg font-medium text-gray-900 mb-4">Admin Actions</h2>
+          <div className="flex gap-4">
+            <button
+              onClick={recalculateAllScores}
+              disabled={recalculatingScores || candidates.filter(c => c.submitted_at && c.github_link).length === 0}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md disabled:opacity-50 flex items-center gap-2"
+            >
+              {recalculatingScores ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  Recalculating...
+                </>
+              ) : (
+                <>
+                  🔄 Recalculate All Scores
+                </>
+              )}
+            </button>
+            <span className="text-sm text-gray-500 flex items-center">
+              Recalculates scores for all {candidates.filter(c => c.submitted_at && c.github_link).length} submitted candidates
+            </span>
+          </div>
+        </div>
+
         {/* Candidates Table */}
         <div className="w-full bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b border-gray-200">
@@ -721,6 +788,9 @@ export default function AdminDashboard() {
                   <option value="Not Started">Not Started</option>
                   <option value="In Progress">In Progress</option>
                   <option value="Completed">Completed</option>
+                  <option value="Approving...">Approving</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Rejected">Rejected</option>
                 </select>
                 <select
                   value={jobOpeningFilter}
@@ -731,6 +801,17 @@ export default function AdminDashboard() {
                   {jobOpenings.map(job => (
                     <option key={job.id} value={job.id}>{job.name}</option>
                   ))}
+                </select>
+                <select
+                  value={approvalStatusFilter}
+                  onChange={(e) => setApprovalStatusFilter(e.target.value)}
+                  className="border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
+                >
+                  <option value="all">All Approval Status</option>
+                  <option value="pending">Pending Approval</option>
+                  <option value="approving">Approving (5min timer)</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
                 </select>
               </div>
               <div className="text-sm text-gray-500">
@@ -975,8 +1056,8 @@ export default function AdminDashboard() {
                                   </>
                                 )}
 
-                                {/* Cancel Approval button - show when approval is in progress */}
-                                {approvingCandidates.has(candidate.id) && (
+                                {/* Cancel Approval button - show when approval is in progress (either local or database state) */}
+                                {(approvingCandidates.has(candidate.id) || candidate.approval_status === 'approving') && (
                                   <button
                                     onClick={() => cancelApproval(candidate.id, candidate.email)}
                                     className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-sm"

@@ -1,9 +1,5 @@
-// Comprehensive Evaluation Methods for AI Challenge Scoring
-// File: /src/lib/scoring-evaluators.ts
-
-import { readFileSync, existsSync } from 'fs'
-import { join } from 'path'
-import { spawn } from 'child_process'
+// AI Challenge Scoring Implementation
+// Based on SCORING.md criteria - evaluates ability to use AI for production systems
 
 interface EvaluationResult {
   score: number
@@ -25,6 +21,7 @@ interface FileInfo {
   type: 'file' | 'directory'
   size: number
   extension?: string
+  content?: string
 }
 
 interface CodeAnalysis {
@@ -33,12 +30,17 @@ interface CodeAnalysis {
   hasTests: boolean
   hasDocumentation: boolean
   codeQuality: number
+  hasMobileApp: boolean
+  mobileType?: 'ios' | 'android' | 'cross-platform' | 'none'
+  hasDatabase: boolean
+  hasBackendAPI: boolean
 }
 
 export class ScoringEvaluators {
   
-  // ========== PROMPT QUALITY EVALUATION ==========
+  // ========== 1. PROMPT QUALITY (100 points) ==========
   
+  // 1.1 Prompt Structure & Organization (25 points)
   evaluatePromptStructure(promptsFile: string | null): EvaluationResult {
     if (!promptsFile) {
       return {
@@ -48,234 +50,54 @@ export class ScoringEvaluators {
       }
     }
 
-    const lines = promptsFile.split('\n').filter(line => line.trim())
+    const lines = promptsFile.split('\n')
     let score = 0
     const evidence: string[] = []
 
-    // Check for clear organization (5 points)
-    const hasHeaders = lines.some(line => line.match(/^#+\s/))
-    const hasNumbering = lines.some(line => line.match(/^\d+\./))
-    const hasTimestamps = lines.some(line => line.match(/\d{1,2}:\d{2}/))
+    // Check for headers/sections (8 points)
+    const hasHeaders = lines.some(line => line.match(/^#+\s/) || line.match(/^[A-Z][A-Z\s]+:$/))
+    const hasNumbering = lines.some(line => line.match(/^\d+[\.)]\s/))
+    const hasSections = lines.filter(line => 
+      line.toLowerCase().includes('database') || 
+      line.toLowerCase().includes('api') || 
+      line.toLowerCase().includes('mobile')
+    ).length >= 2
     
-    if (hasHeaders || hasNumbering || hasTimestamps) {
-      score += 5
-      evidence.push("Prompts are well-organized with clear structure")
-    }
-
-    // Check for prompt clarity (10 points)
-    const clearPrompts = lines.filter(line => {
-      const lower = line.toLowerCase()
-      return lower.includes('create') || lower.includes('implement') || 
-             lower.includes('build') || lower.includes('generate') ||
-             lower.includes('design') || lower.includes('develop')
-    }).length
-
-    if (clearPrompts >= 5) {
-      score += 10
-      evidence.push(`Found ${clearPrompts} clear, actionable prompts`)
-    } else if (clearPrompts >= 3) {
-      score += 7
-      evidence.push(`Found ${clearPrompts} actionable prompts`)
-    } else if (clearPrompts >= 1) {
-      score += 3
-      evidence.push(`Found ${clearPrompts} actionable prompts`)
-    }
-
-    // Check for context and requirements (10 points)
-    const contextLines = lines.filter(line => {
-      const lower = line.toLowerCase()
-      return lower.includes('context') || lower.includes('requirement') ||
-             lower.includes('feature') || lower.includes('user') ||
-             lower.includes('voting') || lower.includes('database')
-    }).length
-
-    if (contextLines >= 3) {
-      score += 10
-      evidence.push(`Good context setting with ${contextLines} relevant lines`)
-    } else if (contextLines >= 1) {
-      score += 5
-      evidence.push(`Some context provided with ${contextLines} relevant lines`)
-    }
-
-    const feedback = score >= 20 ? "Excellent prompt structure and clarity" :
-                    score >= 15 ? "Good prompt structure with room for improvement" :
-                    score >= 10 ? "Basic prompt structure, needs more clarity" :
-                    "Poor prompt structure, lacks organization and clarity"
-
-    return {
-      score: Math.min(score, 25),
-      feedback,
-      evidence
-    }
-  }
-
-  evaluateLayeredPrompting(promptsFile: string | null): EvaluationResult {
-    if (!promptsFile) {
-      return {
-        score: 0,
-        feedback: "No prompts file to evaluate layered approach",
-        evidence: []
-      }
-    }
-
-    const lines = promptsFile.split('\n').filter(line => line.trim())
-    let score = 0
-    const evidence: string[] = []
-
-    // Check for progressive complexity (8 points)
-    const hasProgression = this.checkPromptProgression(lines)
-    if (hasProgression) {
+    if (hasHeaders || hasNumbering) {
       score += 8
-      evidence.push("Shows progressive complexity in prompts")
-    }
-
-    // Check for follow-up prompts (7 points)
-    const followUps = lines.filter(line => {
-      const lower = line.toLowerCase()
-      return lower.includes('follow up') || lower.includes('also') ||
-             lower.includes('now') || lower.includes('next') ||
-             lower.includes('then') || lower.includes('after')
-    }).length
-
-    if (followUps >= 3) {
-      score += 7
-      evidence.push(`Found ${followUps} follow-up prompts showing iteration`)
-    } else if (followUps >= 1) {
+      evidence.push("Uses clear headers or numbering for organization")
+    } else if (hasSections) {
       score += 4
-      evidence.push(`Found ${followUps} follow-up prompts`)
+      evidence.push("Shows some section organization")
     }
 
-    // Check for refinement prompts (5 points)
-    const refinements = lines.filter(line => {
-      const lower = line.toLowerCase()
-      return lower.includes('improve') || lower.includes('fix') ||
-             lower.includes('enhance') || lower.includes('optimize') ||
-             lower.includes('better') || lower.includes('refactor')
-    }).length
-
-    if (refinements >= 2) {
-      score += 5
-      evidence.push(`Found ${refinements} refinement prompts`)
-    } else if (refinements >= 1) {
-      score += 3
-      evidence.push(`Found ${refinements} refinement prompts`)
-    }
-
-    const feedback = score >= 15 ? "Excellent layered prompting approach" :
-                    score >= 10 ? "Good use of layered prompting" :
-                    score >= 5 ? "Basic layered approach" :
-                    "Lacks layered prompting strategy"
-
-    return {
-      score: Math.min(score, 20),
-      feedback,
-      evidence
-    }
-  }
-
-  evaluateContextManagement(promptsFile: string | null): EvaluationResult {
-    if (!promptsFile) {
-      return {
-        score: 0,
-        feedback: "No prompts file to evaluate context management",
-        evidence: []
-      }
-    }
-
-    let score = 0
-    const evidence: string[] = []
-
-    // Check for context preservation (8 points)
-    const hasContext = promptsFile.toLowerCase().includes('context') ||
-                      promptsFile.toLowerCase().includes('remember') ||
-                      promptsFile.toLowerCase().includes('previous')
-    
-    if (hasContext) {
+    // Check for logical progression (8 points)
+    const setupFirst = this.checkLogicalProgression(lines)
+    if (setupFirst) {
       score += 8
-      evidence.push("Shows awareness of context preservation")
+      evidence.push("Logical progression from setup to implementation")
     }
 
-    // Check for requirement references (7 points)
-    const requirements = ['database', 'api', 'frontend', 'mobile', 'voting', 'feature']
-    const mentionedReqs = requirements.filter(req => 
-      promptsFile.toLowerCase().includes(req)
-    ).length
-
-    if (mentionedReqs >= 4) {
-      score += 7
-      evidence.push(`References ${mentionedReqs} key requirements`)
-    } else if (mentionedReqs >= 2) {
-      score += 4
-      evidence.push(`References ${mentionedReqs} key requirements`)
+    // Check for component separation (9 points)
+    const hasDBPrompts = lines.some(line => line.toLowerCase().includes('database') || line.toLowerCase().includes('schema'))
+    const hasAPIPrompts = lines.some(line => line.toLowerCase().includes('api') || line.toLowerCase().includes('backend'))
+    const hasMobilePrompts = lines.some(line => line.toLowerCase().includes('mobile') || line.toLowerCase().includes('ios') || line.toLowerCase().includes('android'))
+    
+    const componentCount = [hasDBPrompts, hasAPIPrompts, hasMobilePrompts].filter(Boolean).length
+    score += componentCount * 3
+    if (componentCount > 0) {
+      evidence.push(`Clear separation of ${componentCount} components`)
     }
 
-    const feedback = score >= 12 ? "Excellent context management" :
-                    score >= 8 ? "Good context management" :
-                    score >= 4 ? "Basic context management" :
-                    "Poor context management"
+    const feedback = score >= 20 ? "Excellent prompt structure and organization" :
+                    score >= 15 ? "Good prompt organization" :
+                    score >= 10 ? "Fair prompt structure" :
+                    "Poor organization - prompts lack clear structure"
 
-    return {
-      score: Math.min(score, 15),
-      feedback,
-      evidence
-    }
+    return { score: Math.min(score, 25), feedback, evidence }
   }
 
-  evaluateIterativeRefinement(promptsFile: string | null): EvaluationResult {
-    if (!promptsFile) {
-      return {
-        score: 0,
-        feedback: "No prompts file to evaluate iterative refinement",
-        evidence: []
-      }
-    }
-
-    let score = 0
-    const evidence: string[] = []
-
-    // Check for error handling prompts (5 points)
-    const errorHandling = promptsFile.toLowerCase().includes('error') ||
-                         promptsFile.toLowerCase().includes('fix') ||
-                         promptsFile.toLowerCase().includes('debug')
-    
-    if (errorHandling) {
-      score += 5
-      evidence.push("Shows error handling and debugging approach")
-    }
-
-    // Check for testing prompts (5 points)
-    const testing = promptsFile.toLowerCase().includes('test') ||
-                   promptsFile.toLowerCase().includes('validate') ||
-                   promptsFile.toLowerCase().includes('verify')
-    
-    if (testing) {
-      score += 5
-      evidence.push("Includes testing and validation prompts")
-    }
-
-    // Check for improvement prompts (5 points)
-    const improvements = ['improve', 'optimize', 'enhance', 'better', 'refactor']
-    const hasImprovements = improvements.some(word => 
-      promptsFile.toLowerCase().includes(word)
-    )
-    
-    if (hasImprovements) {
-      score += 5
-      evidence.push("Shows iterative improvement approach")
-    }
-
-    const feedback = score >= 12 ? "Excellent iterative refinement" :
-                    score >= 8 ? "Good iterative approach" :
-                    score >= 4 ? "Basic iterative approach" :
-                    "Lacks iterative refinement"
-
-    return {
-      score: Math.min(score, 15),
-      feedback,
-      evidence
-    }
-  }
-
+  // 1.2 Technical Specification (25 points)
   evaluateTechnicalSpecificity(promptsFile: string | null): EvaluationResult {
     if (!promptsFile) {
       return {
@@ -287,562 +109,670 @@ export class ScoringEvaluators {
 
     let score = 0
     const evidence: string[] = []
+    const lower = promptsFile.toLowerCase()
 
-    // Check for specific technologies (10 points)
-    const technologies = ['react', 'node', 'express', 'sqlite', 'postgresql', 
-                         'mongodb', 'prisma', 'next.js', 'vue', 'angular',
-                         'swift', 'kotlin', 'flutter', 'react native']
+    // Specific technologies mentioned (10 points)
+    const dbTech = ['sqlite', 'postgresql', 'mysql', 'mongodb', 'firebase', 'supabase']
+    const apiTech = ['express', 'fastapi', 'django', 'rails', 'nest', 'spring']
+    const mobileTech = ['swift', 'swiftui', 'kotlin', 'jetpack compose', 'uikit', 'android studio']
     
-    const mentionedTech = technologies.filter(tech => 
-      promptsFile.toLowerCase().includes(tech)
-    ).length
+    const mentionedDB = dbTech.filter(tech => lower.includes(tech))
+    const mentionedAPI = apiTech.filter(tech => lower.includes(tech))
+    const mentionedMobile = mobileTech.filter(tech => lower.includes(tech))
+    
+    const techScore = Math.min(10, (mentionedDB.length + mentionedAPI.length + mentionedMobile.length) * 3)
+    score += techScore
+    
+    if (mentionedDB.length > 0) evidence.push(`Specifies database: ${mentionedDB.join(', ')}`)
+    if (mentionedAPI.length > 0) evidence.push(`Specifies API framework: ${mentionedAPI.join(', ')}`)
+    if (mentionedMobile.length > 0) evidence.push(`Specifies mobile platform: ${mentionedMobile.join(', ')}`)
 
-    if (mentionedTech >= 4) {
-      score += 10
-      evidence.push(`Mentions ${mentionedTech} specific technologies`)
-    } else if (mentionedTech >= 2) {
-      score += 7
-      evidence.push(`Mentions ${mentionedTech} specific technologies`)
-    } else if (mentionedTech >= 1) {
-      score += 4
-      evidence.push(`Mentions ${mentionedTech} specific technologies`)
+    // Data models and API endpoints (8 points)
+    const hasDataModels = lower.includes('model') || lower.includes('schema') || lower.includes('table')
+    const hasEndpoints = lower.includes('endpoint') || lower.includes('route') || lower.includes('api')
+    const hasUIComponents = lower.includes('screen') || lower.includes('view') || lower.includes('component')
+    
+    if (hasDataModels) {
+      score += 3
+      evidence.push("Includes data model specifications")
+    }
+    if (hasEndpoints) {
+      score += 3
+      evidence.push("Specifies API endpoints")
+    }
+    if (hasUIComponents) {
+      score += 2
+      evidence.push("Mentions UI components")
     }
 
-    // Check for API specifications (8 points)
-    const apiTerms = ['api', 'endpoint', 'route', 'post', 'get', 'json', 'rest']
-    const mentionedAPI = apiTerms.filter(term => 
-      promptsFile.toLowerCase().includes(term)
-    ).length
-
-    if (mentionedAPI >= 4) {
-      score += 8
-      evidence.push(`Specific about API design with ${mentionedAPI} terms`)
-    } else if (mentionedAPI >= 2) {
-      score += 5
-      evidence.push(`Some API specificity with ${mentionedAPI} terms`)
-    }
-
-    // Check for database specificity (7 points)
-    const dbTerms = ['database', 'table', 'schema', 'query', 'model', 'migration']
-    const mentionedDB = dbTerms.filter(term => 
-      promptsFile.toLowerCase().includes(term)
-    ).length
-
-    if (mentionedDB >= 3) {
-      score += 7
-      evidence.push(`Specific about database design with ${mentionedDB} terms`)
-    } else if (mentionedDB >= 1) {
+    // Security and error handling (7 points)
+    const hasSecurity = lower.includes('auth') || lower.includes('security') || lower.includes('token')
+    const hasErrorHandling = lower.includes('error') || lower.includes('validation') || lower.includes('exception')
+    
+    if (hasSecurity) {
       score += 4
-      evidence.push(`Some database specificity with ${mentionedDB} terms`)
+      evidence.push("Addresses authentication/security")
+    }
+    if (hasErrorHandling) {
+      score += 3
+      evidence.push("Considers error handling")
     }
 
     const feedback = score >= 20 ? "Excellent technical specificity" :
-                    score >= 15 ? "Good technical specificity" :
-                    score >= 10 ? "Basic technical specificity" :
-                    "Lacks technical specificity"
+                    score >= 15 ? "Good technical details" :
+                    score >= 10 ? "Fair technical specification" :
+                    "Lacks technical specifics"
 
-    return {
-      score: Math.min(score, 25),
-      feedback,
-      evidence
-    }
+    return { score: Math.min(score, 25), feedback, evidence }
   }
 
-  // ========== AI ORCHESTRATION EVALUATION ==========
-
-  evaluateToolDiversity(analysis: RepositoryAnalysis): EvaluationResult {
-    let score = 0
-    const evidence: string[] = []
-
-    // Check for multiple languages (10 points)
-    const languages = analysis.codeAnalysis.languages
-    if (languages.length >= 3) {
-      score += 10
-      evidence.push(`Uses ${languages.length} programming languages: ${languages.join(', ')}`)
-    } else if (languages.length >= 2) {
-      score += 7
-      evidence.push(`Uses ${languages.length} programming languages: ${languages.join(', ')}`)
-    } else if (languages.length >= 1) {
-      score += 4
-      evidence.push(`Uses ${languages.length} programming language: ${languages.join(', ')}`)
-    }
-
-    // Check for framework diversity (10 points)
-    const frameworks = analysis.codeAnalysis.frameworks
-    if (frameworks.length >= 3) {
-      score += 10
-      evidence.push(`Uses ${frameworks.length} frameworks: ${frameworks.join(', ')}`)
-    } else if (frameworks.length >= 2) {
-      score += 7
-      evidence.push(`Uses ${frameworks.length} frameworks: ${frameworks.join(', ')}`)
-    } else if (frameworks.length >= 1) {
-      score += 4
-      evidence.push(`Uses ${frameworks.length} framework: ${frameworks.join(', ')}`)
-    }
-
-    // Check for AI tool mentions in prompts (10 points)
-    if (analysis.promptsFile) {
-      const aiTools = ['claude', 'gpt', 'copilot', 'chatgpt', 'gemini', 'openai']
-      const mentionedTools = aiTools.filter(tool => 
-        analysis.promptsFile!.toLowerCase().includes(tool)
-      ).length
-
-      if (mentionedTools >= 2) {
-        score += 10
-        evidence.push(`Mentions ${mentionedTools} AI tools in prompts`)
-      } else if (mentionedTools >= 1) {
-        score += 6
-        evidence.push(`Mentions ${mentionedTools} AI tool in prompts`)
+  // 1.3 Feature Coverage (25 points)
+  evaluateFeatureCoverage(promptsFile: string | null): EvaluationResult {
+    if (!promptsFile) {
+      return {
+        score: 0,
+        feedback: "No prompts file to evaluate feature coverage",
+        evidence: []
       }
     }
 
-    const feedback = score >= 25 ? "Excellent tool diversity" :
-                    score >= 20 ? "Good tool diversity" :
-                    score >= 15 ? "Moderate tool diversity" :
-                    "Limited tool diversity"
+    let score = 0
+    const evidence: string[] = []
+    const lower = promptsFile.toLowerCase()
 
-    return {
-      score: Math.min(score, 30),
-      feedback,
-      evidence
-    }
+    // Required features (5 points each)
+    const features = [
+      { name: 'Voting session creation', keywords: ['session', 'create', 'poll', 'question'] },
+      { name: 'Vote casting', keywords: ['vote', 'cast', 'submit', 'choice'] },
+      { name: 'Results display', keywords: ['result', 'count', 'tally', 'display'] },
+      { name: 'Duplicate prevention', keywords: ['duplicate', 'prevent', 'unique', 'once'] },
+      { name: 'User authentication', keywords: ['auth', 'login', 'user', 'identity'] }
+    ]
+
+    features.forEach(feature => {
+      const hasFeature = feature.keywords.some(keyword => lower.includes(keyword))
+      if (hasFeature) {
+        score += 5
+        evidence.push(`Covers: ${feature.name}`)
+      }
+    })
+
+    const feedback = score >= 20 ? "All features thoroughly covered" :
+                    score >= 15 ? "Most features covered" :
+                    score >= 10 ? "Basic features covered" :
+                    "Missing key features"
+
+    return { score: Math.min(score, 25), feedback, evidence }
   }
 
+  // 1.4 Problem-Solving Approach (25 points)
+  evaluateIterativeRefinement(promptsFile: string | null): EvaluationResult {
+    if (!promptsFile) {
+      return {
+        score: 0,
+        feedback: "No prompts file to evaluate problem-solving approach",
+        evidence: []
+      }
+    }
+
+    let score = 0
+    const evidence: string[] = []
+    const lines = promptsFile.split('\n')
+    const lower = promptsFile.toLowerCase()
+
+    // Error handling prompts (7 points)
+    const errorKeywords = ['error', 'fix', 'debug', 'issue', 'problem', 'handle']
+    const errorCount = errorKeywords.filter(keyword => lower.includes(keyword)).length
+    if (errorCount >= 3) {
+      score += 7
+      evidence.push("Strong focus on error handling")
+    } else if (errorCount >= 1) {
+      score += 4
+      evidence.push("Some error handling consideration")
+    }
+
+    // Testing and validation (6 points)
+    const testKeywords = ['test', 'validate', 'verify', 'check', 'ensure']
+    const hasTestingFocus = testKeywords.some(keyword => lower.includes(keyword))
+    if (hasTestingFocus) {
+      score += 6
+      evidence.push("Includes testing/validation approach")
+    }
+
+    // Performance optimization (6 points)
+    const perfKeywords = ['performance', 'optimize', 'efficient', 'scale', 'improve']
+    const hasPerfConsideration = perfKeywords.some(keyword => lower.includes(keyword))
+    if (hasPerfConsideration) {
+      score += 6
+      evidence.push("Considers performance optimization")
+    }
+
+    // Security considerations (6 points)
+    const securityKeywords = ['security', 'secure', 'protect', 'sanitize', 'validate']
+    const hasSecurityFocus = securityKeywords.some(keyword => lower.includes(keyword))
+    if (hasSecurityFocus) {
+      score += 6
+      evidence.push("Addresses security concerns")
+    }
+
+    const feedback = score >= 20 ? "Excellent iterative problem-solving" :
+                    score >= 15 ? "Good problem-solving approach" :
+                    score >= 10 ? "Basic problem-solving" :
+                    "Limited problem-solving evidence"
+
+    return { score: Math.min(score, 25), feedback, evidence }
+  }
+
+  // ========== 2. AI TOOL ORCHESTRATION (55 points) ==========
+
+  // 2.1 Effective AI Usage (30 points)
+  evaluateAIOrchestration(analysis: RepositoryAnalysis): EvaluationResult {
+    let score = 0
+    const evidence: string[] = []
+
+    if (!analysis.promptsFile) {
+      return {
+        score: 0,
+        feedback: "No prompts file to evaluate AI orchestration",
+        evidence: []
+      }
+    }
+
+    const prompts = analysis.promptsFile.split(/\n\n+/).filter(p => p.trim())
+    
+    // Progressive complexity (10 points)
+    if (prompts.length >= 5) {
+      score += 10
+      evidence.push(`Shows progressive approach with ${prompts.length} distinct prompts`)
+    } else if (prompts.length >= 3) {
+      score += 7
+      evidence.push(`Moderate progression with ${prompts.length} prompts`)
+    } else if (prompts.length >= 2) {
+      score += 4
+      evidence.push(`Limited progression with ${prompts.length} prompts`)
+    }
+
+    // Context preservation (10 points)
+    const contextWords = ['previous', 'above', 'earlier', 'continue', 'based on', 'using the']
+    const hasContext = contextWords.some(word => analysis.promptsFile!.toLowerCase().includes(word))
+    if (hasContext) {
+      score += 10
+      evidence.push("Good context preservation across prompts")
+    }
+
+    // Appropriate prompt sizing (10 points)
+    const avgPromptLength = prompts.reduce((sum, p) => sum + p.length, 0) / prompts.length
+    if (avgPromptLength > 100 && avgPromptLength < 500) {
+      score += 10
+      evidence.push("Optimal prompt sizing - not too long or short")
+    } else if (avgPromptLength > 50 && avgPromptLength < 1000) {
+      score += 6
+      evidence.push("Reasonable prompt sizing")
+    }
+
+    const feedback = score >= 25 ? "Masterful AI orchestration" :
+                    score >= 19 ? "Effective AI usage" :
+                    score >= 13 ? "Basic AI usage" :
+                    "Ineffective AI usage"
+
+    return { score: Math.min(score, 30), feedback, evidence }
+  }
+
+  // 2.2 Code Generation Strategy (25 points)
   evaluateWorkflowIntegration(analysis: RepositoryAnalysis): EvaluationResult {
     let score = 0
     const evidence: string[] = []
 
-    // Check for proper project structure (10 points)
-    const hasStructure = this.checkProjectStructure(analysis.files)
-    if (hasStructure.score >= 8) {
-      score += 10
-      evidence.push("Excellent project structure")
-    } else if (hasStructure.score >= 5) {
+    // Component-based approach (10 points)
+    const hasDBFiles = analysis.files.some(f => 
+      f.path.includes('schema') || f.path.includes('model') || f.path.includes('database'))
+    const hasAPIFiles = analysis.files.some(f => 
+      f.path.includes('api') || f.path.includes('route') || f.path.includes('controller'))
+    const hasMobileFiles = analysis.files.some(f => 
+      f.extension === 'swift' || f.extension === 'kt' || f.extension === 'java')
+    
+    const componentCount = [hasDBFiles, hasAPIFiles, hasMobileFiles].filter(Boolean).length
+    score += componentCount * 3.5
+    evidence.push(`Generated ${componentCount} distinct components`)
+
+    // Building on previous outputs (8 points)
+    if (analysis.promptsFile) {
+      const buildingWords = ['now', 'next', 'then', 'add', 'modify', 'update']
+      const hasBuildingApproach = buildingWords.some(word => 
+        analysis.promptsFile!.toLowerCase().includes(word))
+      if (hasBuildingApproach) {
+        score += 8
+        evidence.push("Shows iterative building approach")
+      }
+    }
+
+    // File structure organization (7 points)
+    const wellOrganized = this.checkProjectStructure(analysis.files)
+    if (wellOrganized.score >= 7) {
       score += 7
-      evidence.push("Good project structure")
-    } else if (hasStructure.score >= 3) {
+      evidence.push("Well-organized file structure")
+    } else if (wellOrganized.score >= 4) {
       score += 4
-      evidence.push("Basic project structure")
+      evidence.push("Basic file organization")
     }
 
-    // Check for configuration files (8 points)
-    const configFiles = analysis.files.filter(file => 
-      file.path.includes('package.json') ||
-      file.path.includes('tsconfig.json') ||
-      file.path.includes('vite.config') ||
-      file.path.includes('next.config') ||
-      file.path.includes('webpack.config')
-    ).length
+    const feedback = score >= 20 ? "Clear component-based strategy" :
+                    score >= 15 ? "Good separation of concerns" :
+                    score >= 10 ? "Some strategic thinking" :
+                    "No clear strategy"
 
-    if (configFiles >= 3) {
-      score += 8
-      evidence.push(`Found ${configFiles} configuration files`)
-    } else if (configFiles >= 2) {
-      score += 5
-      evidence.push(`Found ${configFiles} configuration files`)
-    } else if (configFiles >= 1) {
-      score += 3
-      evidence.push(`Found ${configFiles} configuration file`)
-    }
-
-    // Check for development workflow (7 points)
-    const hasWorkflow = analysis.files.some(file => 
-      file.path.includes('docker') ||
-      file.path.includes('github') ||
-      file.path.includes('gitlab') ||
-      file.path.includes('makefile') ||
-      file.path.includes('scripts')
-    )
-
-    if (hasWorkflow) {
-      score += 7
-      evidence.push("Includes development workflow automation")
-    }
-
-    const feedback = score >= 20 ? "Excellent workflow integration" :
-                    score >= 15 ? "Good workflow integration" :
-                    score >= 10 ? "Basic workflow integration" :
-                    "Poor workflow integration"
-
-    return {
-      score: Math.min(score, 25),
-      feedback,
-      evidence
-    }
+    return { score: Math.min(score, 25), feedback, evidence }
   }
 
-  // ========== SYSTEM INTEGRATION EVALUATION ==========
+  // ========== 3. SYSTEM INTEGRATION (110 points) ==========
 
+  // 3.1 Database Implementation (30 points)
   evaluateDatabase(analysis: RepositoryAnalysis): EvaluationResult {
     let score = 0
     const evidence: string[] = []
 
-    // Check for database files (15 points)
-    const dbFiles = analysis.files.filter(file => 
-      file.path.includes('prisma') ||
-      file.path.includes('schema') ||
-      file.path.includes('migration') ||
-      file.path.includes('model') ||
-      file.path.includes('database') ||
-      file.path.includes('.db') ||
-      file.path.includes('sequelize') ||
-      file.path.includes('mongoose')
-    ).length
-
-    if (dbFiles >= 3) {
-      score += 15
-      evidence.push(`Found ${dbFiles} database-related files`)
-    } else if (dbFiles >= 2) {
-      score += 10
-      evidence.push(`Found ${dbFiles} database-related files`)
-    } else if (dbFiles >= 1) {
-      score += 6
-      evidence.push(`Found ${dbFiles} database-related file`)
-    }
-
-    // Check for models/schemas (10 points)
-    const hasModels = this.checkForModels(analysis.files)
-    if (hasModels.score >= 8) {
-      score += 10
-      evidence.push("Well-defined database models")
-    } else if (hasModels.score >= 5) {
-      score += 7
-      evidence.push("Basic database models")
-    } else if (hasModels.score >= 3) {
-      score += 4
-      evidence.push("Minimal database models")
-    }
-
-    // Check for database configuration (5 points)
-    const hasConfig = analysis.files.some(file => 
-      file.path.includes('database.js') ||
-      file.path.includes('db.js') ||
-      file.path.includes('connection') ||
-      file.path.includes('config')
+    // Schema/model definitions (12 points)
+    const schemaFiles = analysis.files.filter(f => 
+      f.path.includes('schema') || 
+      f.path.includes('model') || 
+      f.path.includes('migration') ||
+      f.path.includes('.sql') ||
+      (f.path.includes('prisma') && f.extension === 'prisma')
     )
-
-    if (hasConfig) {
-      score += 5
-      evidence.push("Includes database configuration")
+    
+    if (schemaFiles.length >= 2) {
+      score += 12
+      evidence.push(`Found ${schemaFiles.length} schema/model files`)
+    } else if (schemaFiles.length === 1) {
+      score += 8
+      evidence.push("Found database schema definition")
     }
 
-    const feedback = score >= 25 ? "Excellent database implementation" :
-                    score >= 20 ? "Good database implementation" :
-                    score >= 15 ? "Basic database implementation" :
-                    "Poor database implementation"
-
-    return {
-      score: Math.min(score, 30),
-      feedback,
-      evidence
+    // Proper relationships (6 points)
+    const hasRelationships = analysis.files.some(f => 
+      f.content?.includes('foreign key') ||
+      f.content?.includes('references') ||
+      f.content?.includes('belongsTo') ||
+      f.content?.includes('hasMany')
+    )
+    if (hasRelationships) {
+      score += 6
+      evidence.push("Database includes proper relationships")
     }
+
+    // Connection configuration (6 points)
+    const hasDBConfig = analysis.files.some(f => 
+      f.path.includes('database') && (f.path.includes('config') || f.path.includes('connection'))
+    )
+    if (hasDBConfig) {
+      score += 6
+      evidence.push("Database connection properly configured")
+    }
+
+    // Data validation (6 points)
+    const hasValidation = analysis.codeAnalysis.hasDatabase
+    if (hasValidation) {
+      score += 6
+      evidence.push("Database implementation detected")
+    }
+
+    const feedback = score >= 25 ? "Complete, well-designed database" :
+                    score >= 19 ? "Good database with minor issues" :
+                    score >= 13 ? "Basic database functionality" :
+                    "Incomplete or poor database"
+
+    return { score: Math.min(score, 30), feedback, evidence }
   }
 
+  // 3.2 Backend API (30 points)
   evaluateBackendAPI(analysis: RepositoryAnalysis): EvaluationResult {
     let score = 0
     const evidence: string[] = []
 
-    // Check for API files (15 points)
-    const apiFiles = analysis.files.filter(file => 
-      file.path.includes('api') ||
-      file.path.includes('route') ||
-      file.path.includes('controller') ||
-      file.path.includes('handler') ||
-      file.path.includes('endpoint') ||
-      file.path.includes('server')
-    ).length
-
-    if (apiFiles >= 5) {
-      score += 15
-      evidence.push(`Found ${apiFiles} API-related files`)
-    } else if (apiFiles >= 3) {
-      score += 10
-      evidence.push(`Found ${apiFiles} API-related files`)
-    } else if (apiFiles >= 1) {
-      score += 6
-      evidence.push(`Found ${apiFiles} API-related file`)
-    }
-
-    // Check for RESTful patterns (10 points)
-    const hasRestful = this.checkRestfulPatterns(analysis.files)
-    if (hasRestful) {
-      score += 10
-      evidence.push("Follows RESTful API patterns")
-    }
-
-    // Check for middleware (5 points)
-    const hasMiddleware = analysis.files.some(file => 
-      file.path.includes('middleware') ||
-      file.path.includes('auth') ||
-      file.path.includes('cors') ||
-      file.path.includes('validation')
+    // API endpoints (12 points)
+    const apiFiles = analysis.files.filter(f => 
+      f.path.includes('route') || 
+      f.path.includes('controller') || 
+      f.path.includes('handler') ||
+      f.path.includes('api')
     )
-
-    if (hasMiddleware) {
-      score += 5
-      evidence.push("Includes middleware implementation")
-    }
-
-    const feedback = score >= 25 ? "Excellent API implementation" :
-                    score >= 20 ? "Good API implementation" :
-                    score >= 15 ? "Basic API implementation" :
-                    "Poor API implementation"
-
-    return {
-      score: Math.min(score, 30),
-      feedback,
-      evidence
-    }
-  }
-
-  evaluateFrontend(analysis: RepositoryAnalysis): EvaluationResult {
-    let score = 0
-    const evidence: string[] = []
-
-    // Check for frontend files (12 points)
-    const frontendFiles = analysis.files.filter(file => 
-      file.path.includes('component') ||
-      file.path.includes('page') ||
-      file.path.includes('view') ||
-      file.path.includes('ui') ||
-      file.path.includes('src') ||
-      file.extension === 'tsx' ||
-      file.extension === 'jsx' ||
-      file.extension === 'vue'
-    ).length
-
-    if (frontendFiles >= 10) {
+    
+    if (apiFiles.length >= 4) {
       score += 12
-      evidence.push(`Found ${frontendFiles} frontend files`)
-    } else if (frontendFiles >= 5) {
+      evidence.push(`Found ${apiFiles.length} API endpoint files`)
+    } else if (apiFiles.length >= 2) {
       score += 8
-      evidence.push(`Found ${frontendFiles} frontend files`)
-    } else if (frontendFiles >= 3) {
-      score += 5
-      evidence.push(`Found ${frontendFiles} frontend files`)
+      evidence.push(`Found ${apiFiles.length} API endpoint files`)
+    } else if (apiFiles.length >= 1) {
+      score += 4
+      evidence.push("Found basic API endpoints")
     }
 
-    // Check for component structure (8 points)
-    const hasComponents = this.checkComponentStructure(analysis.files)
-    if (hasComponents.score >= 6) {
-      score += 8
-      evidence.push("Well-structured components")
-    } else if (hasComponents.score >= 4) {
-      score += 5
-      evidence.push("Basic component structure")
+    // HTTP methods and status codes (6 points)
+    const hasProperHTTP = analysis.codeAnalysis.hasBackendAPI
+    if (hasProperHTTP) {
+      score += 6
+      evidence.push("Backend API implementation detected")
     }
 
-    // Check for styling (5 points)
-    const hasStyling = analysis.files.some(file => 
-      file.extension === 'css' ||
-      file.extension === 'scss' ||
-      file.extension === 'less' ||
-      file.path.includes('style') ||
-      file.path.includes('tailwind')
+    // Request/response validation (6 points)
+    const hasValidation = analysis.files.some(f => 
+      f.path.includes('validation') || 
+      f.path.includes('middleware') ||
+      f.content?.includes('validate')
     )
-
-    if (hasStyling) {
-      score += 5
-      evidence.push("Includes styling implementation")
+    if (hasValidation) {
+      score += 6
+      evidence.push("Includes request validation")
     }
 
-    const feedback = score >= 20 ? "Excellent frontend implementation" :
-                    score >= 15 ? "Good frontend implementation" :
-                    score >= 10 ? "Basic frontend implementation" :
-                    "Poor frontend implementation"
-
-    return {
-      score: Math.min(score, 25),
-      feedback,
-      evidence
+    // Authentication implementation (6 points)
+    const hasAuth = analysis.files.some(f => 
+      f.path.includes('auth') || 
+      f.content?.includes('authenticate') ||
+      f.content?.includes('jwt') ||
+      f.content?.includes('session')
+    )
+    if (hasAuth) {
+      score += 6
+      evidence.push("Authentication implemented")
     }
+
+    const feedback = score >= 25 ? "Production-ready API" :
+                    score >= 19 ? "Well-implemented API" :
+                    score >= 13 ? "Functional API with issues" :
+                    "Incomplete or poor API"
+
+    return { score: Math.min(score, 30), feedback, evidence }
   }
 
+  // 3.3 Mobile Implementation (25 points)
   evaluateMobile(analysis: RepositoryAnalysis): EvaluationResult {
     let score = 0
     const evidence: string[] = []
 
-    // Check for mobile files (15 points)
-    const mobileFiles = analysis.files.filter(file => 
-      file.path.includes('mobile') ||
-      file.path.includes('ios') ||
-      file.path.includes('android') ||
-      file.extension === 'swift' ||
-      file.extension === 'kt' ||
-      file.extension === 'java' ||
-      file.path.includes('flutter') ||
-      file.path.includes('react-native')
-    ).length
+    // Check for native mobile app
+    const iosFiles = analysis.files.filter(f => 
+      f.extension === 'swift' || f.path.includes('.xcodeproj') || f.path.includes('Info.plist')
+    )
+    const androidFiles = analysis.files.filter(f => 
+      f.extension === 'kt' || f.extension === 'java' || f.path.includes('gradle')
+    )
 
-    if (mobileFiles >= 5) {
+    // Native implementation check (15 points)
+    if (iosFiles.length > 5) {
       score += 15
-      evidence.push(`Found ${mobileFiles} mobile-related files`)
-    } else if (mobileFiles >= 3) {
-      score += 10
-      evidence.push(`Found ${mobileFiles} mobile-related files`)
-    } else if (mobileFiles >= 1) {
-      score += 6
-      evidence.push(`Found ${mobileFiles} mobile-related file`)
+      evidence.push(`Native iOS app with ${iosFiles.length} Swift files`)
+    } else if (androidFiles.length > 5) {
+      score += 15
+      evidence.push(`Native Android app with ${androidFiles.length} Kotlin/Java files`)
+    } else if (iosFiles.length > 0 || androidFiles.length > 0) {
+      score += 8
+      evidence.push("Basic native mobile implementation")
     }
 
-    // Check for responsive design (10 points)
-    const hasResponsive = this.checkResponsiveDesign(analysis.files)
-    if (hasResponsive) {
-      score += 10
-      evidence.push("Includes responsive design considerations")
+    // Deduct points for cross-platform
+    const hasCrossPlatform = analysis.files.some(f => 
+      f.path.includes('react-native') || 
+      f.path.includes('flutter') ||
+      f.path.includes('expo')
+    )
+    if (hasCrossPlatform) {
+      score = Math.max(0, score - 5)
+      evidence.push("⚠️ Uses cross-platform framework (not native)")
     }
 
-    const feedback = score >= 20 ? "Excellent mobile implementation" :
-                    score >= 15 ? "Good mobile implementation" :
-                    score >= 10 ? "Basic mobile implementation" :
-                    "Poor mobile implementation"
-
-    return {
-      score: Math.min(score, 25),
-      feedback,
-      evidence
+    // UI components (5 points)
+    const hasUIComponents = analysis.codeAnalysis.hasMobileApp
+    if (hasUIComponents) {
+      score += 5
+      evidence.push("Mobile UI components detected")
     }
+
+    // API integration (5 points)
+    const hasAPIIntegration = analysis.files.some(f => 
+      (f.extension === 'swift' || f.extension === 'kt') && 
+      (f.content?.includes('URLSession') || f.content?.includes('Retrofit') || f.content?.includes('fetch'))
+    )
+    if (hasAPIIntegration) {
+      score += 5
+      evidence.push("Mobile app integrates with API")
+    }
+
+    const feedback = score >= 20 ? "Native app with good UX" :
+                    score >= 15 ? "Functional native app" :
+                    score >= 10 ? "Basic native app" :
+                    "Non-native or incomplete"
+
+    return { score: Math.min(score, 25), feedback, evidence }
   }
 
-  // ========== REASONING TRACE EVALUATION ==========
+  // 3.4 Integration Quality (25 points)
+  evaluateFrontend(analysis: RepositoryAnalysis): EvaluationResult {
+    let score = 0
+    const evidence: string[] = []
 
+    // API calls from mobile app (10 points)
+    const hasAPICalls = analysis.files.some(f => 
+      (f.extension === 'swift' || f.extension === 'kt') &&
+      (f.content?.includes('api') || f.content?.includes('http') || f.content?.includes('request'))
+    )
+    if (hasAPICalls) {
+      score += 10
+      evidence.push("Mobile app makes API calls")
+    }
+
+    // Data flow between layers (8 points)
+    const hasModels = analysis.files.filter(f => 
+      f.path.includes('model') || f.content?.includes('struct') || f.content?.includes('class')
+    ).length >= 3
+    if (hasModels) {
+      score += 8
+      evidence.push("Consistent data models across layers")
+    }
+
+    // Error handling across layers (7 points)
+    const hasErrorHandling = analysis.files.some(f => 
+      f.content?.includes('try') || f.content?.includes('catch') || f.content?.includes('error')
+    )
+    if (hasErrorHandling) {
+      score += 7
+      evidence.push("Error handling implemented")
+    }
+
+    const feedback = score >= 20 ? "Seamless integration between components" :
+                    score >= 15 ? "Good integration quality" :
+                    score >= 10 ? "Basic integration" :
+                    "Poor or no integration"
+
+    // Using the integration quality scoring for the "Frontend" method
+    return { score: Math.min(score, 25), feedback, evidence }
+  }
+
+  // ========== 4. END-TO-END FUNCTIONALITY (25 points) ==========
+  
+  evaluateEndToEnd(analysis: RepositoryAnalysis): EvaluationResult {
+    let score = 0
+    const evidence: string[] = []
+
+    // Project structure (10 points)
+    const structure = this.checkProjectStructure(analysis.files)
+    if (structure.score >= 8) {
+      score += 10
+      evidence.push("Well-organized project structure")
+    } else if (structure.score >= 5) {
+      score += 6
+      evidence.push("Decent project organization")
+    } else if (structure.score >= 3) {
+      score += 3
+      evidence.push("Basic project structure")
+    }
+
+    // Code quality indicators (10 points)
+    if (analysis.codeAnalysis.codeQuality >= 7) {
+      score += 10
+      evidence.push("High code quality detected")
+    } else if (analysis.codeAnalysis.codeQuality >= 5) {
+      score += 6
+      evidence.push("Good code quality")
+    } else if (analysis.codeAnalysis.codeQuality >= 3) {
+      score += 3
+      evidence.push("Basic code quality")
+    }
+
+    // Documentation (5 points)
+    if (analysis.readmeFile) {
+      score += 3
+      evidence.push("README documentation present")
+    }
+    if (analysis.codeAnalysis.hasDocumentation) {
+      score += 2
+      evidence.push("Additional documentation found")
+    }
+
+    const feedback = score >= 20 ? "Excellent end-to-end implementation" :
+                    score >= 15 ? "Good overall implementation" :
+                    score >= 10 ? "Basic implementation" :
+                    "Poor implementation quality"
+
+    return { score: Math.min(score, 25), feedback, evidence }
+  }
+
+  // ========== 5. REASONING TRACE (25 points) ==========
+  
   evaluateReasoningTrace(analysis: RepositoryAnalysis): EvaluationResult {
     let score = 0
     const evidence: string[] = []
 
-    // Check for README quality (10 points)
+    // Technical decisions documented (15 points)
     if (analysis.readmeFile) {
-      const readmeScore = this.evaluateReadmeQuality(analysis.readmeFile)
-      score += Math.min(readmeScore, 10)
-      evidence.push("Includes comprehensive README")
-    }
-
-    // Check for decision documentation (8 points)
-    const hasDecisions = analysis.files.some(file => 
-      file.path.includes('decision') ||
-      file.path.includes('architecture') ||
-      file.path.includes('design') ||
-      file.path.includes('doc')
-    )
-
-    if (hasDecisions) {
-      score += 8
-      evidence.push("Documents design decisions")
-    }
-
-    // Check for prompts documentation (7 points)
-    if (analysis.promptsFile) {
-      score += 7
-      evidence.push("Includes prompts documentation")
-    }
-
-    const feedback = score >= 20 ? "Excellent reasoning trace" :
-                    score >= 15 ? "Good reasoning trace" :
-                    score >= 10 ? "Basic reasoning trace" :
-                    "Poor reasoning trace"
-
-    return {
-      score: Math.min(score, 25),
-      feedback,
-      evidence
-    }
-  }
-
-  // ========== HELPER METHODS ==========
-
-  private checkPromptProgression(lines: string[]): boolean {
-    // Simple heuristic: look for increasing complexity indicators
-    const complexityIndicators = ['simple', 'basic', 'advanced', 'complex', 'full']
-    let foundProgression = false
-    
-    for (let i = 0; i < lines.length - 1; i++) {
-      const currentLine = lines[i].toLowerCase()
-      const nextLine = lines[i + 1].toLowerCase()
+      const readme = analysis.readmeFile.toLowerCase()
       
-      for (let j = 0; j < complexityIndicators.length - 1; j++) {
-        if (currentLine.includes(complexityIndicators[j]) && 
-            nextLine.includes(complexityIndicators[j + 1])) {
-          foundProgression = true
-          break
-        }
+      // Technology choices explained (5 points)
+      if (readme.includes('chose') || readme.includes('selected') || readme.includes('decided')) {
+        score += 5
+        evidence.push("Documents technology choices")
       }
       
-      if (foundProgression) break
+      // Architecture decisions (5 points)
+      if (readme.includes('architecture') || readme.includes('structure') || readme.includes('design')) {
+        score += 5
+        evidence.push("Explains architecture decisions")
+      }
+      
+      // Trade-offs considered (5 points)
+      if (readme.includes('trade-off') || readme.includes('pros') || readme.includes('cons')) {
+        score += 5
+        evidence.push("Considers trade-offs")
+      }
     }
+
+    // Problem documentation (10 points)
+    if (analysis.promptsFile) {
+      const prompts = analysis.promptsFile.toLowerCase()
+      
+      // Challenges encountered (5 points)
+      if (prompts.includes('issue') || prompts.includes('problem') || prompts.includes('challenge')) {
+        score += 5
+        evidence.push("Documents challenges encountered")
+      }
+      
+      // Solutions implemented (5 points)
+      if (prompts.includes('fix') || prompts.includes('solve') || prompts.includes('solution')) {
+        score += 5
+        evidence.push("Documents solutions implemented")
+      }
+    }
+
+    const feedback = score >= 20 ? "Excellent reasoning documentation" :
+                    score >= 15 ? "Good technical reasoning" :
+                    score >= 10 ? "Basic reasoning trace" :
+                    "Limited reasoning documentation"
+
+    return { score: Math.min(score, 25), feedback, evidence }
+  }
+
+  // Helper Methods
+  
+  private checkLogicalProgression(lines: string[]): boolean {
+    const setupWords = ['setup', 'install', 'create', 'initialize', 'start']
+    const implWords = ['implement', 'add', 'build', 'develop']
     
-    return foundProgression
+    let setupIndex = -1
+    let implIndex = -1
+    
+    lines.forEach((line, index) => {
+      const lower = line.toLowerCase()
+      if (setupIndex === -1 && setupWords.some(word => lower.includes(word))) {
+        setupIndex = index
+      }
+      if (implIndex === -1 && implWords.some(word => lower.includes(word))) {
+        implIndex = index
+      }
+    })
+    
+    return setupIndex !== -1 && implIndex !== -1 && setupIndex < implIndex
   }
 
   private checkProjectStructure(files: FileInfo[]): { score: number } {
     let score = 0
-    const paths = files.map(f => f.path)
     
-    // Check for standard directories
-    const standardDirs = ['src', 'lib', 'components', 'pages', 'api', 'styles', 'public']
-    const foundDirs = standardDirs.filter(dir => 
-      paths.some(path => path.includes(dir))
-    ).length
+    // Check for organized directories
+    const hasSrcDir = files.some(f => f.path.includes('src/'))
+    const hasApiDir = files.some(f => f.path.includes('api/') || f.path.includes('backend/'))
+    const hasMobileDir = files.some(f => f.path.includes('ios/') || f.path.includes('android/'))
+    const hasDbDir = files.some(f => f.path.includes('database/') || f.path.includes('db/'))
     
-    score += Math.min(foundDirs * 2, 10)
+    if (hasSrcDir) score += 2
+    if (hasApiDir) score += 3
+    if (hasMobileDir) score += 3
+    if (hasDbDir) score += 2
     
     return { score }
   }
 
   private checkForModels(files: FileInfo[]): { score: number } {
-    let score = 0
-    const modelFiles = files.filter(file => 
-      file.path.includes('model') ||
-      file.path.includes('schema') ||
-      file.path.includes('entity')
-    ).length
+    const modelFiles = files.filter(f => 
+      f.path.includes('model') || 
+      f.path.includes('schema') ||
+      f.path.includes('entity')
+    )
     
-    score += Math.min(modelFiles * 3, 10)
-    
-    return { score }
+    return { score: Math.min(10, modelFiles.length * 2) }
   }
 
   private checkRestfulPatterns(files: FileInfo[]): boolean {
-    const restPatterns = ['get', 'post', 'put', 'delete', 'patch']
-    return files.some(file => 
-      restPatterns.some(pattern => file.path.toLowerCase().includes(pattern))
+    return files.some(f => 
+      f.path.includes('route') || 
+      f.path.includes('controller') ||
+      f.content?.includes('GET') ||
+      f.content?.includes('POST')
     )
   }
 
   private checkComponentStructure(files: FileInfo[]): { score: number } {
-    let score = 0
-    const componentFiles = files.filter(file => 
-      file.path.includes('component') ||
-      file.extension === 'tsx' ||
-      file.extension === 'jsx'
-    ).length
-    
-    score += Math.min(componentFiles, 10)
-    
-    return { score }
-  }
-
-  private checkResponsiveDesign(files: FileInfo[]): boolean {
-    return files.some(file => 
-      file.path.includes('responsive') ||
-      file.path.includes('mobile') ||
-      file.path.includes('media') ||
-      file.path.includes('breakpoint')
+    const componentFiles = files.filter(f => 
+      f.path.includes('component') || 
+      f.path.includes('view') ||
+      f.path.includes('screen')
     )
+    
+    return { score: Math.min(8, componentFiles.length) }
   }
 
-  private evaluateReadmeQuality(readme: string): number {
-    let score = 0
-    const lower = readme.toLowerCase()
-    
-    // Check for key sections
-    const sections = ['installation', 'usage', 'features', 'setup', 'requirements']
-    const foundSections = sections.filter(section => lower.includes(section)).length
-    score += foundSections * 2
-    
-    // Check for length and detail
-    if (readme.length > 500) score += 3
-    if (readme.length > 1000) score += 2
-    
-    return score
+  // Compatibility methods for scoring engine
+  evaluateToolDiversity(analysis: RepositoryAnalysis): EvaluationResult {
+    // This is now part of Code Generation Strategy
+    return this.evaluateWorkflowIntegration(analysis)
+  }
+
+  evaluateLayeredPrompting(promptsFile: string | null): EvaluationResult {
+    // This is now part of AI Orchestration
+    return this.evaluateAIOrchestration({ promptsFile } as RepositoryAnalysis)
+  }
+
+  evaluateContextManagement(promptsFile: string | null): EvaluationResult {
+    // This is now part of AI Orchestration
+    return this.evaluateAIOrchestration({ promptsFile } as RepositoryAnalysis)
   }
 }
