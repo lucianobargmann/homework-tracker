@@ -73,6 +73,16 @@ export async function POST(
         // Wait 5 minutes (300,000 milliseconds)
         await new Promise(resolve => setTimeout(resolve, 5 * 60 * 1000))
         
+        // Check if the approval was cancelled during the wait
+        const currentCandidate = await prisma.user.findUnique({
+          where: { id }
+        })
+        
+        if (!currentCandidate || currentCandidate.approval_status !== 'approving') {
+          console.log(`❌ Approval was cancelled for candidate: ${candidate.email}`)
+          return
+        }
+        
         console.log(`📧 Sending approval email to: ${candidate.email}`)
         
         // Send approval email

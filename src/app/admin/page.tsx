@@ -35,7 +35,6 @@ interface User {
 }
 
 export default function AdminDashboard() {
-  const { data: session } = useSession()
   const router = useRouter()
   const [jobOpenings, setJobOpenings] = useState<JobOpening[]>([])
   const [candidates, setCandidates] = useState<User[]>([])
@@ -59,12 +58,20 @@ export default function AdminDashboard() {
   const [sortField, setSortField] = useState<string>('created_at')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [approvingCandidates, setApprovingCandidates] = useState<Set<string>>(new Set())
+  const [approvalTimers, setApprovalTimers] = useState<Map<string, NodeJS.Timeout>>(new Map())
   const ITEMS_PER_PAGE = 10
 
   useEffect(() => {
     fetchJobOpenings()
     fetchCandidates()
   }, [])
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      approvalTimers.forEach(timer => clearTimeout(timer))
+    }
+  }, [approvalTimers])
 
   const handleUnauthorized = () => {
     router.push('/auth/signin')
@@ -266,10 +273,6 @@ export default function AdminDashboard() {
   }
 
   const approveCandidate = async (candidateId: string, candidateEmail: string) => {
-    if (!confirm(`Are you sure you want to approve ${candidateEmail}? This will send an approval email in 5 minutes.`)) {
-      return
-    }
-
     try {
       setApprovingCandidates(prev => new Set(prev).add(candidateId))
       
@@ -281,8 +284,25 @@ export default function AdminDashboard() {
       const data = await response.json()
 
       if (response.ok) {
-        alert(`Approval process started for ${candidateEmail}. Email will be sent in 5 minutes.`)
+        alert(`Approval process started for ${candidateEmail}. Email will be sent in 5 minutes. Click the button again to cancel.`)
         fetchCandidates() // Refresh to show updated status
+        
+        // Set a local timer to update UI after 5 minutes
+        const timer = setTimeout(() => {
+          setApprovingCandidates(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(candidateId)
+            return newSet
+          })
+          setApprovalTimers(prev => {
+            const newMap = new Map(prev)
+            newMap.delete(candidateId)
+            return newMap
+          })
+          fetchCandidates() // Refresh to show final approved status
+        }, 5 * 60 * 1000) // 5 minutes
+        
+        setApprovalTimers(prev => new Map(prev).set(candidateId, timer))
       } else {
         alert(`Error approving candidate: ${data.error}`)
         setApprovingCandidates(prev => {
@@ -299,6 +319,68 @@ export default function AdminDashboard() {
         newSet.delete(candidateId)
         return newSet
       })
+    }
+  }
+
+  const cancelApproval = async (candidateId: string, candidateEmail: string) => {
+    try {
+      // Clear the local timer
+      const timer = approvalTimers.get(candidateId)
+      if (timer) {
+        clearTimeout(timer)
+        setApprovalTimers(prev => {
+          const newMap = new Map(prev)
+          newMap.delete(candidateId)
+          return newMap
+        })
+      }
+
+      // Cancel the approval in the backend
+      const response = await fetch(`/api/admin/candidates/${candidateId}/cancel-approval`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      if (response.ok) {
+        setApprovingCandidates(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(candidateId)
+          return newSet
+        })
+        alert(`Approval cancelled for ${candidateEmail}. No email will be sent.`)
+        fetchCandidates() // Refresh to show updated status
+      } else {
+        const data = await response.json()
+        alert(`Error cancelling approval: ${data.error}`)
+      }
+    } catch (error) {
+      console.error('Error cancelling approval:', error)
+      alert('Error cancelling approval')
+    }
+  }
+
+  const rejectCandidate = async (candidateId: string, candidateEmail: string) => {
+    if (!confirm(`Are you sure you want to reject ${candidateEmail}? This will send a rejection email immediately.`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/admin/candidates/${candidateId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        alert(`${candidateEmail} has been rejected and notified via email.`)
+        fetchCandidates() // Refresh to show updated status
+      } else {
+        alert(`Error rejecting candidate: ${data.error}`)
+      }
+    } catch (error) {
+      console.error('Error rejecting candidate:', error)
+      alert('Error rejecting candidate')
     }
   }
 
@@ -402,7 +484,6 @@ export default function AdminDashboard() {
 
   // Calculate statistics
   const totalCandidates = candidates.length
-  const activeCandidates = candidates.filter(c => !c.archived).length
   const archivedCandidates = candidates.filter(c => c.archived).length
   const notStartedCount = candidates.filter(c => !c.archived && getStatus(c) === 'Not Started').length
   const inProgressCount = candidates.filter(c => !c.archived && getStatus(c) === 'In Progress').length
@@ -692,188 +773,253 @@ export default function AdminDashboard() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {paginatedCandidates.map((candidate) => (
-                  <tr key={candidate.id} className={candidate.archived ? 'opacity-50' : ''}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {editingCandidate === candidate.id ? (
-                        <input
-                          type="email"
-                          value={editEmail}
-                          onChange={(e) => setEditEmail(e.target.value)}
-                          className="border border-gray-300 rounded px-2 py-1 text-sm w-full"
-                          placeholder="Email"
-                        />
-                      ) : (
-                        <span 
-                          className="cursor-pointer hover:text-blue-600 hover:underline"
-                          onClick={() => startEditCandidate(candidate)}
-                        >
-                          {candidate.email}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {editingCandidate === candidate.id ? (
-                        <select
-                          value={editJobId}
-                          onChange={(e) => setEditJobId(e.target.value)}
-                          className="border border-gray-300 rounded px-2 py-1 text-sm w-full"
-                        >
-                          <option value="">No Job Opening</option>
-                          {jobOpenings.map(job => (
-                            <option key={job.id} value={job.id}>{job.name}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span 
-                          className="cursor-pointer hover:text-blue-600 hover:underline"
-                          onClick={() => startEditCandidate(candidate)}
-                        >
-                          {candidate.job_opening?.name || '-'}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(getStatus(candidate))}`}>
-                        {getStatus(candidate)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {candidate.github_link ? (
-                        <a
-                          href={candidate.github_link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          View Repository
-                        </a>
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {getTimeTaken(candidate)}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {candidate.prompts_used ? (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setSelectedPrompts({email: candidate.email, prompts: candidate.prompts_used!})}
-                            className="text-blue-600 hover:text-blue-800 font-medium"
-                          >
-                            View Prompts ({candidate.prompts_used.split('\n').filter(line => line.trim()).length} lines)
-                          </button>
-                        </div>
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(candidate.created_at).toLocaleDateString()} {new Date(candidate.created_at).toLocaleTimeString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {candidate.github_link ? (
-                        <div className="flex flex-col gap-1">
-                          {candidate.scoring_results && candidate.scoring_results.length > 0 ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-green-600 font-semibold">
-                                {candidate.scoring_results[0].percentage.toFixed(1)}% 
-                                <span className="text-gray-500 text-xs ml-1">(Auto)</span>
-                              </span>
-                              <button
-                                onClick={() => viewScoringDetails(JSON.parse(candidate.scoring_results![0].report_data))}
-                                className="text-blue-600 hover:text-blue-800 text-xs"
+                  <tr key={candidate.id} className={`${candidate.archived ? 'opacity-50' : ''} border-b-2 border-gray-100`}>
+                    {/* First row - Main info */}
+                    <td colSpan={9} className="px-6 py-4">
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        {/* Left column - Basic info */}
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Email:</span>
+                            {editingCandidate === candidate.id ? (
+                              <input
+                                type="email"
+                                value={editEmail}
+                                onChange={(e) => setEditEmail(e.target.value)}
+                                className="border border-gray-300 rounded px-2 py-1 text-sm flex-1"
+                                placeholder="Email"
+                              />
+                            ) : (
+                              <span 
+                                className="cursor-pointer hover:text-blue-600 hover:underline text-sm text-gray-900"
+                                onClick={() => startEditCandidate(candidate)}
                               >
-                                View Details
-                              </button>
-                            </div>
-                          ) : scoringResults[candidate.id] ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-green-600 font-semibold">
-                                {scoringResults[candidate.id].percentage.toFixed(1)}%
-                                <span className="text-gray-500 text-xs ml-1">(Manual)</span>
+                                {candidate.email}
                               </span>
-                              <button
-                                onClick={() => viewScoringDetails(scoringResults[candidate.id])}
-                                className="text-blue-600 hover:text-blue-800 text-xs"
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Job Opening:</span>
+                            {editingCandidate === candidate.id ? (
+                              <select
+                                value={editJobId}
+                                onChange={(e) => setEditJobId(e.target.value)}
+                                className="border border-gray-300 rounded px-2 py-1 text-sm flex-1"
                               >
-                                View Details
+                                <option value="">No Job Opening</option>
+                                {jobOpenings.map(job => (
+                                  <option key={job.id} value={job.id}>{job.name}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span 
+                                className="cursor-pointer hover:text-blue-600 hover:underline text-sm text-gray-600"
+                                onClick={() => startEditCandidate(candidate)}
+                              >
+                                {candidate.job_opening?.name || 'None'}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Status:</span>
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(getStatus(candidate))}`}>
+                              {getStatus(candidate)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Middle column - Assignment info */}
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">GitHub:</span>
+                            {candidate.github_link ? (
+                              <a
+                                href={candidate.github_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 text-sm truncate max-w-48"
+                                title={candidate.github_link}
+                              >
+                                View Repository
+                              </a>
+                            ) : (
+                              <span className="text-gray-400 text-sm">Not submitted</span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Time Taken:</span>
+                            <span className="text-sm text-gray-600">{getTimeTaken(candidate)}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Created:</span>
+                            <span className="text-sm text-gray-600">
+                              {new Date(candidate.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Right column - Prompts and Scoring */}
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">Prompts:</span>
+                            {candidate.prompts_used ? (
+                              <button
+                                onClick={() => setSelectedPrompts({email: candidate.email, prompts: candidate.prompts_used!})}
+                                className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                              >
+                                View ({candidate.prompts_used.split('\n').filter(line => line.trim()).length} lines)
                               </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => scoreCandidate(candidate.id, candidate.github_link!, candidate.prompts_used || undefined)}
-                              disabled={scoringCandidate === candidate.id}
-                              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-xs disabled:opacity-50"
-                            >
-                              {scoringCandidate === candidate.id ? 'Scoring...' : 'Score AI'}
-                            </button>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">No GitHub link</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {editingCandidate === candidate.id ? (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => saveEdit(candidate.id)}
-                            className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            className="bg-gray-600 hover:bg-gray-700 text-white px-2 py-1 rounded text-xs"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <button
-                            onClick={() => startEditCandidate(candidate)}
-                            className="text-blue-600 hover:text-blue-800 text-xs"
-                          >
-                            Edit
-                          </button>
-                          
-                          {/* Approval button - only show for completed candidates who haven't been approved yet */}
-                          {candidate.submitted_at && 
-                           !candidate.approval_status && 
-                           candidate.github_link && (
-                            <button
-                              onClick={() => approveCandidate(candidate.id, candidate.email)}
-                              disabled={approvingCandidates.has(candidate.id)}
-                              className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {approvingCandidates.has(candidate.id) ? 'Approving...' : 'Approve'}
-                            </button>
-                          )}
+                            ) : (
+                              <span className="text-gray-400 text-sm">None</span>
+                            )}
+                          </div>
 
-                          {/* Show approval status for candidates in process or approved */}
-                          {candidate.approval_status === 'approving' && (
-                            <span className="text-blue-600 text-xs font-medium">
-                              Approving...
-                            </span>
-                          )}
-                          
-                          {candidate.approval_status === 'approved' && (
-                            <span className="text-green-600 text-xs font-medium">
-                              ✅ Approved
-                            </span>
-                          )}
-
-                          <input
-                            type="checkbox"
-                            checked={candidate.archived}
-                            onChange={() => toggleArchive(candidate.id, candidate.archived)}
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                            title="Archive candidate"
-                          />
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">AI Score:</span>
+                            {candidate.github_link ? (
+                              <div className="flex items-center gap-2">
+                                {candidate.scoring_results && candidate.scoring_results.length > 0 ? (
+                                  <>
+                                    <span className="text-green-600 font-semibold text-sm">
+                                      {candidate.scoring_results[0].percentage.toFixed(1)}% 
+                                      <span className="text-gray-500 text-xs ml-1">(Auto)</span>
+                                    </span>
+                                    <button
+                                      onClick={() => viewScoringDetails(JSON.parse(candidate.scoring_results![0].report_data))}
+                                      className="text-blue-600 hover:text-blue-800 text-xs"
+                                    >
+                                      Details
+                                    </button>
+                                  </>
+                                ) : scoringResults[candidate.id] ? (
+                                  <>
+                                    <span className="text-green-600 font-semibold text-sm">
+                                      {scoringResults[candidate.id].percentage.toFixed(1)}%
+                                      <span className="text-gray-500 text-xs ml-1">(Manual)</span>
+                                    </span>
+                                    <button
+                                      onClick={() => viewScoringDetails(scoringResults[candidate.id])}
+                                      className="text-blue-600 hover:text-blue-800 text-xs"
+                                    >
+                                      Details
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    onClick={() => scoreCandidate(candidate.id, candidate.github_link!, candidate.prompts_used || undefined)}
+                                    disabled={scoringCandidate === candidate.id}
+                                    className="bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded text-xs disabled:opacity-50"
+                                  >
+                                    {scoringCandidate === candidate.id ? 'Scoring...' : 'Score'}
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">No GitHub link</span>
+                            )}
+                          </div>
                         </div>
-                      )}
+                      </div>
+
+                      {/* Second row - Actions */}
+                      <div className="mt-4 pt-3 border-t border-gray-100">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {editingCandidate === candidate.id ? (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => saveEdit(candidate.id)}
+                                  className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
+                                >
+                                  Save Changes
+                                </button>
+                                <button
+                                  onClick={cancelEdit}
+                                  className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded text-sm"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => startEditCandidate(candidate)}
+                                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                >
+                                  Edit Info
+                                </button>
+                                
+                                {/* Approval and Rejection buttons - only show for completed candidates who haven't been processed yet */}
+                                {candidate.submitted_at && 
+                                 !candidate.approval_status && 
+                                 candidate.github_link && 
+                                 !approvingCandidates.has(candidate.id) && (
+                                  <>
+                                    <button
+                                      onClick={() => approveCandidate(candidate.id, candidate.email)}
+                                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
+                                    >
+                                      Approve Candidate
+                                    </button>
+                                    
+                                    <button
+                                      onClick={() => rejectCandidate(candidate.id, candidate.email)}
+                                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
+                                    >
+                                      Reject Candidate
+                                    </button>
+                                  </>
+                                )}
+
+                                {/* Cancel Approval button - show when approval is in progress */}
+                                {approvingCandidates.has(candidate.id) && (
+                                  <button
+                                    onClick={() => cancelApproval(candidate.id, candidate.email)}
+                                    className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-sm"
+                                  >
+                                    Cancel Approval
+                                  </button>
+                                )}
+
+                                {/* Show approval status for candidates in process or approved */}
+                                {(candidate.approval_status === 'approving' || approvingCandidates.has(candidate.id)) && (
+                                  <span className="text-blue-600 text-sm font-medium bg-blue-50 px-3 py-1 rounded">
+                                    ⏳ Approving... (Email in 5 minutes)
+                                  </span>
+                                )}
+                                
+                                {candidate.approval_status === 'approved' && (
+                                  <span className="text-green-600 text-sm font-medium bg-green-50 px-3 py-1 rounded">
+                                    ✅ Approved
+                                  </span>
+                                )}
+
+                                {candidate.approval_status === 'rejected' && (
+                                  <span className="text-red-600 text-sm font-medium bg-red-50 px-3 py-1 rounded">
+                                    ❌ Rejected
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <label className="flex items-center text-sm text-gray-600">
+                              <input
+                                type="checkbox"
+                                checked={candidate.archived}
+                                onChange={() => toggleArchive(candidate.id, candidate.archived)}
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mr-2"
+                              />
+                              Archived
+                            </label>
+                          </div>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -69,6 +69,10 @@ export async function PATCH(
       updateData.archived = Boolean(body.archived)
     }
 
+    if (body.approval_status !== undefined) {
+      updateData.approval_status = body.approval_status
+    }
+
     const candidate = await prisma.user.update({
       where: { id: resolvedParams.id },
       data: updateData,
