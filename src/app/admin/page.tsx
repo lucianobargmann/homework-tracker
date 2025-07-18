@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 interface JobOpening {
   id: string
@@ -38,7 +39,6 @@ export default function AdminDashboard() {
   const router = useRouter()
   const [jobOpenings, setJobOpenings] = useState<JobOpening[]>([])
   const [candidates, setCandidates] = useState<User[]>([])
-  const [newJobName, setNewJobName] = useState('')
   const [newCandidateEmail, setNewCandidateEmail] = useState('')
   const [selectedJobId, setSelectedJobId] = useState('')
   const [loading, setLoading] = useState(false)
@@ -55,12 +55,12 @@ export default function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [jobOpeningFilter, setJobOpeningFilter] = useState('all')
   const [approvalStatusFilter, setApprovalStatusFilter] = useState('all')
+  const [globalJobFilter, setGlobalJobFilter] = useState('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [sortField, setSortField] = useState<string>('created_at')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [approvingCandidates, setApprovingCandidates] = useState<Set<string>>(new Set())
   const [approvalTimers, setApprovalTimers] = useState<Map<string, NodeJS.Timeout>>(new Map())
-  const [recalculatingScores, setRecalculatingScores] = useState(false)
   const ITEMS_PER_PAGE = 10
 
   useEffect(() => {
@@ -161,41 +161,6 @@ export default function AdminDashboard() {
     }
   }
 
-  const recalculateAllScores = async () => {
-    if (!confirm('This will recalculate scores for all submitted candidates. This may take several minutes. Continue?')) {
-      return
-    }
-
-    setRecalculatingScores(true)
-    let successCount = 0
-    let errorCount = 0
-
-    try {
-      const submittedCandidates = candidates.filter(c => c.submitted_at && c.github_link)
-      
-      for (const candidate of submittedCandidates) {
-        try {
-          console.log(`Recalculating score for ${candidate.email}...`)
-          await scoreCandidate(candidate.id, candidate.github_link!, candidate.prompts_used)
-          successCount++
-        } catch (error) {
-          console.error(`Error recalculating score for ${candidate.email}:`, error)
-          errorCount++
-        }
-      }
-
-      alert(`Recalculation complete! Success: ${successCount}, Errors: ${errorCount}`)
-      
-      // Refresh candidates to get updated scores
-      fetchCandidates()
-    } catch (error) {
-      console.error('Error during bulk recalculation:', error)
-      alert('Error during bulk recalculation')
-    } finally {
-      setRecalculatingScores(false)
-    }
-  }
-
   const fetchJobOpenings = async () => {
     try {
       const response = await fetch('/api/admin/job-openings')
@@ -241,29 +206,6 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error('Error fetching candidates:', error)
       setCandidates([]) // Set to empty array on error
-    }
-  }
-
-  const createJobOpening = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newJobName.trim()) return
-
-    setLoading(true)
-    try {
-      const response = await fetch('/api/admin/job-openings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newJobName }),
-      })
-
-      if (response.ok) {
-        setNewJobName('')
-        fetchJobOpenings()
-      }
-    } catch (error) {
-      console.error('Error creating job opening:', error)
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -321,10 +263,10 @@ export default function AdminDashboard() {
       const data = await response.json()
 
       if (response.ok) {
-        alert(`Approval process started for ${candidateEmail}. Email will be sent in 5 minutes. Click the button again to cancel.`)
+        alert(`Approval process started for ${candidateEmail}. Email will be sent in 30 seconds. Click the button again to cancel.`)
         fetchCandidates() // Refresh to show updated status
         
-        // Set a local timer to update UI after 5 minutes
+        // Set a local timer to update UI after 30 seconds
         const timer = setTimeout(() => {
           setApprovingCandidates(prev => {
             const newSet = new Set(prev)
@@ -337,7 +279,7 @@ export default function AdminDashboard() {
             return newMap
           })
           fetchCandidates() // Refresh to show final approved status
-        }, 5 * 60 * 1000) // 5 minutes
+        }, 30 * 1000) // 30 seconds
         
         setApprovalTimers(prev => new Map(prev).set(candidateId, timer))
       } else {
@@ -523,20 +465,28 @@ export default function AdminDashboard() {
     setCurrentPage(1)
   }, [searchEmail, showArchived, statusFilter, jobOpeningFilter, approvalStatusFilter, sortField, sortDirection])
 
+  // Apply global job filter to candidates for statistics
+  const statsFilteredCandidates = globalJobFilter === 'all' 
+    ? candidates 
+    : candidates.filter(c => c.job_opening?.id === globalJobFilter)
+
   // Calculate statistics
-  const totalCandidates = candidates.length
-  const archivedCandidates = candidates.filter(c => c.archived).length
-  const notStartedCount = candidates.filter(c => !c.archived && getStatus(c) === 'Not Started').length
-  const inProgressCount = candidates.filter(c => !c.archived && getStatus(c) === 'In Progress').length
-  const completedCount = candidates.filter(c => !c.archived && getStatus(c) === 'Completed').length
+  const totalCandidates = statsFilteredCandidates.length
+  const archivedCandidates = statsFilteredCandidates.filter(c => c.archived).length
+  const notStartedCount = statsFilteredCandidates.filter(c => !c.archived && getStatus(c) === 'Not Started').length
+  const inProgressCount = statsFilteredCandidates.filter(c => !c.archived && getStatus(c) === 'In Progress').length
+  const completedCount = statsFilteredCandidates.filter(c => !c.archived && getStatus(c) === 'Completed').length
+  const approvingCount = statsFilteredCandidates.filter(c => !c.archived && getStatus(c) === 'Approving...').length
+  const approvedCount = statsFilteredCandidates.filter(c => !c.archived && getStatus(c) === 'Approved').length
+  const rejectedCount = statsFilteredCandidates.filter(c => !c.archived && getStatus(c) === 'Rejected').length
   const totalJobOpenings = jobOpenings.length
-  const avgCompletionTime = candidates
+  const avgCompletionTime = statsFilteredCandidates
     .filter(c => c.started_at && c.submitted_at)
     .reduce((total, c) => {
       const start = new Date(c.started_at!)
       const end = new Date(c.submitted_at!)
       return total + (end.getTime() - start.getTime())
-    }, 0) / candidates.filter(c => c.started_at && c.submitted_at).length
+    }, 0) / statsFilteredCandidates.filter(c => c.started_at && c.submitted_at).length
 
   const formatAvgTime = (ms: number) => {
     if (isNaN(ms)) return '0h 0m'
@@ -567,7 +517,32 @@ export default function AdminDashboard() {
   return (
     <div className="w-full min-h-screen bg-gray-50">
       <div className="w-full p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-8">Admin Dashboard</h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+          <Link
+            href="/admin/settings"
+            className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md flex items-center gap-2"
+          >
+            ⚙️ Settings
+          </Link>
+        </div>
+        
+        {/* Global Job Filter */}
+        <div className="mb-6 bg-white p-4 rounded-lg shadow">
+          <div className="flex items-center gap-4">
+            <label className="text-sm font-medium text-gray-700">Filter Statistics by Job Opening:</label>
+            <select
+              value={globalJobFilter}
+              onChange={(e) => setGlobalJobFilter(e.target.value)}
+              className="border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white"
+            >
+              <option value="all">All Job Openings</option>
+              {jobOpenings.map(job => (
+                <option key={job.id} value={job.id}>{job.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
         
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -629,7 +604,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Secondary Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
@@ -640,13 +615,33 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+          <div className="bg-green-50 p-4 rounded-lg border border-green-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Job Openings</p>
-                <p className="text-xl font-bold text-gray-900">{totalJobOpenings}</p>
+                <p className="text-sm font-medium text-green-600">Approved</p>
+                <p className="text-xl font-bold text-green-900">{approvedCount}</p>
               </div>
-              <div className="text-gray-400">💼</div>
+              <div className="text-green-400">✅</div>
+            </div>
+          </div>
+
+          <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-red-600">Rejected</p>
+                <p className="text-xl font-bold text-red-900">{rejectedCount}</p>
+              </div>
+              <div className="text-red-400">❌</div>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-600">Approving</p>
+                <p className="text-xl font-bold text-blue-900">{approvingCount}</p>
+              </div>
+              <div className="text-blue-400">⏳</div>
             </div>
           </div>
 
@@ -659,30 +654,18 @@ export default function AdminDashboard() {
               <div className="text-gray-400">📦</div>
             </div>
           </div>
+
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Job Openings</p>
+                <p className="text-xl font-bold text-gray-900">{totalJobOpenings}</p>
+              </div>
+              <div className="text-gray-400">💼</div>
+            </div>
+          </div>
         </div>
         
-        {/* Create Job Opening */}
-        <div className="mb-8 bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Create Job Opening</h2>
-          <form onSubmit={createJobOpening} className="flex gap-4">
-            <input
-              type="text"
-              placeholder="Job opening name"
-              value={newJobName}
-              onChange={(e) => setNewJobName(e.target.value)}
-              className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-gray-900 bg-white placeholder-gray-500"
-              disabled={loading}
-            />
-            <button
-              type="submit"
-              disabled={loading || !newJobName.trim()}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md disabled:opacity-50"
-            >
-              Create Job Opening
-            </button>
-          </form>
-        </div>
-
         {/* Add Candidate */}
         <div className="mb-8 bg-white p-6 rounded-lg shadow">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Add Candidate</h2>
@@ -727,32 +710,6 @@ export default function AdminDashboard() {
               Create Candidate
             </button>
           </form>
-        </div>
-
-        {/* Admin Actions */}
-        <div className="mb-8 bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Admin Actions</h2>
-          <div className="flex gap-4">
-            <button
-              onClick={recalculateAllScores}
-              disabled={recalculatingScores || candidates.filter(c => c.submitted_at && c.github_link).length === 0}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md disabled:opacity-50 flex items-center gap-2"
-            >
-              {recalculatingScores ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                  Recalculating...
-                </>
-              ) : (
-                <>
-                  🔄 Recalculate All Scores
-                </>
-              )}
-            </button>
-            <span className="text-sm text-gray-500 flex items-center">
-              Recalculates scores for all {candidates.filter(c => c.submitted_at && c.github_link).length} submitted candidates
-            </span>
-          </div>
         </div>
 
         {/* Candidates Table */}
@@ -809,7 +766,7 @@ export default function AdminDashboard() {
                 >
                   <option value="all">All Approval Status</option>
                   <option value="pending">Pending Approval</option>
-                  <option value="approving">Approving (5min timer)</option>
+                  <option value="approving">Approving (30s timer)</option>
                   <option value="approved">Approved</option>
                   <option value="rejected">Rejected</option>
                 </select>
@@ -1069,7 +1026,7 @@ export default function AdminDashboard() {
                                 {/* Show approval status for candidates in process or approved */}
                                 {(candidate.approval_status === 'approving' || approvingCandidates.has(candidate.id)) && (
                                   <span className="text-blue-600 text-sm font-medium bg-blue-50 px-3 py-1 rounded">
-                                    ⏳ Approving... (Email in 5 minutes)
+                                    ⏳ Approving... (Email in 30 seconds)
                                   </span>
                                 )}
                                 

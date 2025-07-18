@@ -68,10 +68,10 @@ export async function POST(
     // Start the 5-minute delay process in the background
     setTimeout(async () => {
       try {
-        console.log(`⏰ Starting 5-minute approval process for candidate: ${candidate.email}`)
+        console.log(`⏰ Starting 30-second approval process for candidate: ${candidate.email}`)
         
-        // Wait 5 minutes (300,000 milliseconds)
-        await new Promise(resolve => setTimeout(resolve, 5 * 60 * 1000))
+        // Wait 30 seconds (30,000 milliseconds)
+        await new Promise(resolve => setTimeout(resolve, 30 * 1000))
         
         // Check if the approval was cancelled during the wait
         const currentCandidate = await prisma.user.findUnique({
