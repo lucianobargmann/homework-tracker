@@ -519,12 +519,26 @@ export default function AdminDashboard() {
       <div className="w-full p-6">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-          <Link
-            href="/admin/settings"
-            className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md flex items-center gap-2"
-          >
-            ⚙️ Settings
-          </Link>
+          <div className="flex gap-4">
+            <Link
+              href="/admin/users"
+              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md flex items-center gap-2"
+            >
+              👥 Users
+            </Link>
+            <Link
+              href="/admin/tokens"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center gap-2"
+            >
+              🔑 API Tokens
+            </Link>
+            <Link
+              href="/admin/settings"
+              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md flex items-center gap-2"
+            >
+              ⚙️ Settings
+            </Link>
+          </div>
         </div>
         
         {/* Global Job Filter */}
@@ -828,10 +842,7 @@ export default function AdminDashboard() {
                                 placeholder="Email"
                               />
                             ) : (
-                              <span 
-                                className="cursor-pointer hover:text-blue-600 hover:underline text-sm text-gray-900"
-                                onClick={() => startEditCandidate(candidate)}
-                              >
+                              <span className="text-sm text-gray-900">
                                 {candidate.email}
                               </span>
                             )}
@@ -851,10 +862,7 @@ export default function AdminDashboard() {
                                 ))}
                               </select>
                             ) : (
-                              <span 
-                                className="cursor-pointer hover:text-blue-600 hover:underline text-sm text-gray-600"
-                                onClick={() => startEditCandidate(candidate)}
-                              >
+                              <span className="text-sm text-gray-600">
                                 {candidate.job_opening?.name || 'None'}
                               </span>
                             )}

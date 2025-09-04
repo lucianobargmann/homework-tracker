@@ -94,3 +94,29 @@ model ScoringResult {
 
   @@map("scoring_results")
 }
+
+model BearerToken {
+  id          String   @id @default(uuid())
+  name        String   // Description/name for this token
+  token       String   @unique
+  created_by  String   // Admin user email who created this token
+  created_at  DateTime @default(now())
+  last_used   DateTime?
+  is_active   Boolean  @default(true)
+
+  @@map("bearer_tokens")
+}
+
+model AdminUser {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String?
+  role         String   @default("admin") // admin, super_admin, etc.
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  last_login   DateTime?
+  created_by   String?  // Email of admin who created this user
+
+  @@map("admin_users")
+}

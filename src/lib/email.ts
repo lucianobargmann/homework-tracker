@@ -1,59 +1,79 @@
 import nodemailer from 'nodemailer'
+import type { Transporter } from 'nodemailer'
 
-// Check if SMTP credentials are provided, otherwise default to Mailpit
-const hasSmtpCredentials = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
-
-// Debug SMTP environment variables
-console.log('🔧 SMTP Configuration Debug:')
-console.log('SMTP_HOST:', process.env.SMTP_HOST || 'NOT SET')
-console.log('SMTP_PORT:', process.env.SMTP_PORT || 'NOT SET')
-console.log('SMTP_USER:', process.env.SMTP_USER || 'NOT SET')
-console.log('SMTP_PASS:', process.env.SMTP_PASS ? '***HIDDEN***' : 'NOT SET')
-console.log('SMTP_FROM:', process.env.SMTP_FROM || 'NOT SET')
-console.log('Using Mailpit fallback:', !hasSmtpCredentials)
-
-const smtpConfig = hasSmtpCredentials ? {
-  // Production SMTP configuration
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: parseInt(process.env.SMTP_PORT || '587') === 465, // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-  // Add timeout and debugging options
-  connectionTimeout: 30000, // 30 seconds
-  greetingTimeout: 10000, // 10 seconds
-  logger: false, // Set to true for detailed SMTP logs
-  debug: false, // Set to true for debug output
-} : {
-  // Mailpit configuration for development/testing
-  host: process.env.SMTP_HOST || 'localhost',
-  port: parseInt(process.env.SMTP_PORT || '1025'),
-  secure: false,
-  auth: undefined,
-  // Add timeout and debugging options
-  connectionTimeout: 30000, // 30 seconds
-  greetingTimeout: 10000, // 10 seconds
-  logger: false, // Set to true for detailed SMTP logs
-  debug: false, // Set to true for debug output
+// Global singleton for the transporter
+const globalForTransporter = globalThis as unknown as {
+  _emailTransporter: Transporter | undefined
+  _transporterInitialized: boolean | undefined
 }
 
-console.log('📧 Creating SMTP transporter with config:', {
-  ...smtpConfig,
-  auth: smtpConfig.auth ? { user: smtpConfig.auth.user, pass: '***HIDDEN***' } : undefined
-})
-
-const transporter = nodemailer.createTransport(smtpConfig)
-
-// Verify SMTP connection on startup
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('❌ SMTP connection verification failed:', error)
-  } else {
-    console.log('✅ SMTP server connection verified successfully')
+// Lazy initialization function for the transporter
+function getTransporter(): Transporter {
+  // Return existing transporter if already initialized
+  if (globalForTransporter._emailTransporter) {
+    return globalForTransporter._emailTransporter
   }
-})
+
+  // Initialize only once
+  if (!globalForTransporter._transporterInitialized) {
+    globalForTransporter._transporterInitialized = true
+    
+    // Check if SMTP credentials are provided, otherwise default to Mailpit
+    const hasSmtpCredentials = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
+
+    // Debug SMTP environment variables (only log once)
+    console.log('🔧 SMTP Configuration Debug (Singleton Init):')
+    console.log('SMTP_HOST:', process.env.SMTP_HOST || 'NOT SET')
+    console.log('SMTP_PORT:', process.env.SMTP_PORT || 'NOT SET')
+    console.log('SMTP_USER:', process.env.SMTP_USER || 'NOT SET')
+    console.log('SMTP_PASS:', process.env.SMTP_PASS ? '***HIDDEN***' : 'NOT SET')
+    console.log('SMTP_FROM:', process.env.SMTP_FROM || 'NOT SET')
+    console.log('Using Mailpit fallback:', !hasSmtpCredentials)
+
+    const smtpConfig = hasSmtpCredentials ? {
+      // Production SMTP configuration
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: parseInt(process.env.SMTP_PORT || '587') === 465, // true for 465, false for other ports
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+      // Add timeout and debugging options
+      connectionTimeout: 30000, // 30 seconds
+      greetingTimeout: 10000, // 10 seconds
+      logger: false, // Set to true for detailed SMTP logs
+      debug: false, // Set to true for debug output
+    } : {
+      // Mailpit configuration for development/testing
+      host: process.env.SMTP_HOST || 'localhost',
+      port: parseInt(process.env.SMTP_PORT || '1025'),
+      secure: false,
+      auth: undefined,
+      // Add timeout and debugging options
+      connectionTimeout: 30000, // 30 seconds
+      greetingTimeout: 10000, // 10 seconds
+      logger: false, // Set to true for detailed SMTP logs
+      debug: false, // Set to true for debug output
+    }
+
+    const transporter = nodemailer.createTransport(smtpConfig)
+
+    // Verify SMTP connection on startup (only once)
+    transporter.verify((error: any) => {
+      if (error) {
+        console.error('❌ SMTP connection verification failed:', error)
+      } else {
+        console.log('✅ SMTP server connection verified successfully (Singleton)')
+      }
+    })
+
+    // Store in global for reuse
+    globalForTransporter._emailTransporter = transporter
+  }
+
+  return globalForTransporter._emailTransporter!
+}
 
 export async function sendMagicLinkEmail(email: string, url: string) {
   const mailOptions = {
@@ -111,7 +131,7 @@ export async function sendMagicLinkEmail(email: string, url: string) {
   }
 
   try {
-    const info = await transporter.sendMail(mailOptions)
+    const info = await getTransporter().sendMail(mailOptions)
     console.log('✅ Magic link email sent successfully!')
     console.log('Message ID:', info.messageId)
     console.log('Response:', info.response)
@@ -192,7 +212,7 @@ export async function sendApprovalEmail(email: string, candidateName?: string) {
   }
 
   try {
-    const info = await transporter.sendMail(mailOptions)
+    const info = await getTransporter().sendMail(mailOptions)
     console.log('✅ Approval email sent successfully!')
     console.log('Message ID:', info.messageId)
     console.log('Response:', info.response)
@@ -271,7 +291,7 @@ export async function sendRejectionEmail(email: string, candidateName?: string) 
   }
 
   try {
-    const info = await transporter.sendMail(mailOptions)
+    const info = await getTransporter().sendMail(mailOptions)
     console.log('✅ Rejection email sent successfully!')
     console.log('Message ID:', info.messageId)
     console.log('Response:', info.response)

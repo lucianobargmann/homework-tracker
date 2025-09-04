@@ -11,10 +11,22 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if user is admin
+    // Check if user is admin (superadmin from .env OR admin user from database)
     const superadmins = process.env.SUPERADMINS?.split(',').map(email => email.trim()) || []
-    if (!superadmins.includes(session.user.email)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const isSuper = superadmins.includes(session.user.email)
+    
+    if (!isSuper) {
+      // Check if user exists in admin_users table and is active
+      const adminUser = await prisma.adminUser.findUnique({
+        where: { 
+          email: session.user.email,
+          is_active: true
+        }
+      })
+      
+      if (!adminUser) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
     }
 
     const candidates = await prisma.user.findMany({
@@ -44,10 +56,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if user is admin
+    // Check if user is admin (superadmin from .env OR admin user from database)
     const superadmins = process.env.SUPERADMINS?.split(',').map(email => email.trim()) || []
-    if (!superadmins.includes(session.user.email)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const isSuper = superadmins.includes(session.user.email)
+    
+    if (!isSuper) {
+      // Check if user exists in admin_users table and is active
+      const adminUser = await prisma.adminUser.findUnique({
+        where: { 
+          email: session.user.email,
+          is_active: true
+        }
+      })
+      
+      if (!adminUser) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
     }
 
     const { email, job_opening_id } = await request.json()

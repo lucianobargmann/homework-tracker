@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
+// GET all admin users
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
@@ -25,22 +26,23 @@ export async function GET() {
       })
       
       if (!adminUser) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
     }
 
-    const jobOpenings = await prisma.jobOpening.findMany({
-      orderBy: { created_at: 'desc' }
+    const users = await prisma.adminUser.findMany({
+      orderBy: { created_at: 'desc' },
     })
 
-    return NextResponse.json(jobOpenings)
+    return NextResponse.json(users)
   } catch (error) {
-    console.error('Error fetching job openings:', error)
+    console.error('Error fetching admin users:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-export async function POST(request: NextRequest) {
+// POST create new admin user
+export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions)
     
@@ -62,23 +64,38 @@ export async function POST(request: NextRequest) {
       })
       
       if (!adminUser) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
     }
 
-    const { name } = await request.json()
+    const body = await request.json()
+    const { email, name, role } = body
 
-    if (!name || typeof name !== 'string') {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+    if (!email) {
+      return NextResponse.json({ error: 'Email is required' }, { status: 400 })
     }
 
-    const jobOpening = await prisma.jobOpening.create({
-      data: { name: name.trim() }
+    // Check if user already exists
+    const existingUser = await prisma.adminUser.findUnique({
+      where: { email: email.toLowerCase() }
     })
 
-    return NextResponse.json(jobOpening)
+    if (existingUser) {
+      return NextResponse.json({ error: 'User with this email already exists' }, { status: 400 })
+    }
+
+    const user = await prisma.adminUser.create({
+      data: {
+        email: email.toLowerCase(),
+        name,
+        role: role || 'admin',
+        created_by: session.user.email,
+      },
+    })
+
+    return NextResponse.json(user)
   } catch (error) {
-    console.error('Error creating job opening:', error)
+    console.error('Error creating admin user:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
