@@ -52,8 +52,9 @@ export async function GET(
 // PATCH update admin user
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await getServerSession(authOptions)
     
@@ -84,7 +85,7 @@ export async function PATCH(
 
     // Check if user exists
     const existingUser = await prisma.adminUser.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!existingUser) {
@@ -103,7 +104,7 @@ export async function PATCH(
     }
 
     const user = await prisma.adminUser.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(email && { email: email.toLowerCase() }),
         ...(name !== undefined && { name }),
@@ -123,8 +124,9 @@ export async function PATCH(
 // DELETE admin user
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const session = await getServerSession(authOptions)
     
@@ -152,7 +154,7 @@ export async function DELETE(
 
     // Check if user exists
     const existingUser = await prisma.adminUser.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!existingUser) {
@@ -165,7 +167,7 @@ export async function DELETE(
     }
 
     await prisma.adminUser.delete({
-      where: { id: params.id },
+      where: { id },
     })
 
     return NextResponse.json({ message: 'User deleted successfully' })
