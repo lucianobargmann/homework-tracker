@@ -1,25 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { requireAdmin } from '@/lib/admin-auth'
 import { prisma } from '@/lib/db'
 import { sendApprovalEmail } from '@/lib/email'
 
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
+    console.log(`🔐 Checking admin access for approval request`)
+    const adminCheck = await requireAdmin()
     
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if ('error' in adminCheck) {
+      return NextResponse.json({ error: adminCheck.error }, { status: adminCheck.status })
     }
-
-    // Check if user is admin
-    const superadmins = process.env.SUPERADMINS?.split(',').map(email => email.trim()) || []
-    if (!superadmins.includes(session.user.email)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    
 
     const { id } = await context.params
 
@@ -118,7 +113,8 @@ export async function POST(
       status: 'approving'
     })
   } catch (error) {
-    console.error('Error starting approval process:', error)
+    console.error('❌ Error starting approval process:', error)
+    console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

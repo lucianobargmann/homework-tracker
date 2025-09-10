@@ -16,9 +16,26 @@ export async function POST(
     }
 
     // Check if user is admin
+    console.log(`🔐 Checking admin access for reject: ${session.user.email}`)
     const superadmins = process.env.SUPERADMINS?.split(',').map(email => email.trim()) || []
-    if (!superadmins.includes(session.user.email)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const isSuper = superadmins.includes(session.user.email)
+    
+    if (!isSuper) {
+      // Check if user exists in admin_users table and is active
+      const adminUser = await prisma.adminUser.findUnique({
+        where: { 
+          email: session.user.email,
+          is_active: true
+        }
+      })
+      
+      if (!adminUser) {
+        console.log(`❌ Access denied for non-admin user: ${session.user.email}`)
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      console.log(`✅ Admin user verified from database: ${session.user.email} (role: ${adminUser.role})`)
+    } else {
+      console.log(`✅ Superadmin verified from environment: ${session.user.email}`)
     }
 
     const { id } = await context.params
