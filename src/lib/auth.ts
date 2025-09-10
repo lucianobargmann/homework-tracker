@@ -59,12 +59,20 @@ export const authOptions: NextAuthOptions = {
       })
 
       if (!existingUser) {
-        // Check if this is a superadmin
+        // Check if this is a superadmin from environment
         const superadmins = process.env.SUPERADMINS?.split(',').map(email => email.trim()) || []
-        const isAdmin = superadmins.includes(user.email)
+        const isSuperAdmin = superadmins.includes(user.email)
 
-        // Create user if they're a superadmin or if they were added as a candidate
-        if (isAdmin) {
+        // Check if this user exists in AdminUser table
+        const adminUser = await prisma.adminUser.findUnique({
+          where: { 
+            email: user.email,
+            is_active: true
+          }
+        })
+
+        // Create user if they're a superadmin or an active admin user
+        if (isSuperAdmin || adminUser) {
           await prisma.user.create({
             data: {
               email: user.email,

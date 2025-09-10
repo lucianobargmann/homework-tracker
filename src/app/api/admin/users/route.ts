@@ -84,7 +84,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User with this email already exists' }, { status: 400 })
     }
 
-    const user = await prisma.adminUser.create({
+    // Create admin user in AdminUser table
+    const adminUser = await prisma.adminUser.create({
       data: {
         email: email.toLowerCase(),
         name,
@@ -93,7 +94,17 @@ export async function POST(request: Request) {
       },
     })
 
-    return NextResponse.json(user)
+    // Also create/update in User table for authentication
+    await prisma.user.upsert({
+      where: { email: email.toLowerCase() },
+      update: { is_admin: true },
+      create: {
+        email: email.toLowerCase(),
+        is_admin: true,
+      },
+    })
+
+    return NextResponse.json(adminUser)
   } catch (error) {
     console.error('Error creating admin user:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
