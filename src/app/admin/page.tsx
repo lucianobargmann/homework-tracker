@@ -61,7 +61,7 @@ export default function AdminDashboard() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [approvingCandidates, setApprovingCandidates] = useState<Set<string>>(new Set())
   const [approvalTimers, setApprovalTimers] = useState<Map<string, NodeJS.Timeout>>(new Map())
-  const ITEMS_PER_PAGE = 10
+  const ITEMS_PER_PAGE = 50
 
   useEffect(() => {
     fetchJobOpenings()
@@ -1077,7 +1077,7 @@ export default function AdminDashboard() {
               <div className="text-sm text-gray-700">
                 Page {currentPage} of {totalPages}
               </div>
-              <div className="flex space-x-2">
+              <div className="flex space-x-1">
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
@@ -1085,19 +1085,86 @@ export default function AdminDashboard() {
                 >
                   Previous
                 </button>
-                {[...Array(totalPages)].map((_, i) => (
-                  <button
-                    key={i + 1}
-                    onClick={() => setCurrentPage(i + 1)}
-                    className={`px-3 py-1 border rounded-md text-sm ${
-                      currentPage === i + 1
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-                    }`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
+                
+                {(() => {
+                  const pageNumbers = [];
+                  const showEllipsisStart = currentPage > 4;
+                  const showEllipsisEnd = currentPage < totalPages - 3;
+                  
+                  // Always show first page
+                  pageNumbers.push(
+                    <button
+                      key={1}
+                      onClick={() => setCurrentPage(1)}
+                      className={`px-3 py-1 border rounded-md text-sm ${
+                        currentPage === 1
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                      }`}
+                    >
+                      1
+                    </button>
+                  );
+                  
+                  // Show ellipsis after first page if needed
+                  if (showEllipsisStart) {
+                    pageNumbers.push(
+                      <span key="ellipsis-start" className="px-2 py-1 text-gray-500">
+                        ...
+                      </span>
+                    );
+                  }
+                  
+                  // Show pages around current page
+                  const startPage = Math.max(2, currentPage - 2);
+                  const endPage = Math.min(totalPages - 1, currentPage + 2);
+                  
+                  for (let i = startPage; i <= endPage; i++) {
+                    if (i === 1 || i === totalPages) continue; // Skip first and last as they're always shown
+                    pageNumbers.push(
+                      <button
+                        key={i}
+                        onClick={() => setCurrentPage(i)}
+                        className={`px-3 py-1 border rounded-md text-sm ${
+                          currentPage === i
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                        }`}
+                      >
+                        {i}
+                      </button>
+                    );
+                  }
+                  
+                  // Show ellipsis before last page if needed
+                  if (showEllipsisEnd) {
+                    pageNumbers.push(
+                      <span key="ellipsis-end" className="px-2 py-1 text-gray-500">
+                        ...
+                      </span>
+                    );
+                  }
+                  
+                  // Always show last page if there's more than one page
+                  if (totalPages > 1) {
+                    pageNumbers.push(
+                      <button
+                        key={totalPages}
+                        onClick={() => setCurrentPage(totalPages)}
+                        className={`px-3 py-1 border rounded-md text-sm ${
+                          currentPage === totalPages
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                        }`}
+                      >
+                        {totalPages}
+                      </button>
+                    );
+                  }
+                  
+                  return pageNumbers;
+                })()}
+                
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                   disabled={currentPage === totalPages}
